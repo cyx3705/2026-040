@@ -1,0 +1,66 @@
+# HistoryJanus baseline begin
+*.bak
+*.cache
+*.eod
+*.eox
+*.elk
+*.flk
+*.lck
+*.log
+*.obj
+*.pdb
+*.slk
+*.tmp
+*.xlk
+# HistoryJanus baseline end
+
+# HistoryJanus managed begin
+# 本块由 HistoryJanus 按设置 proj.excludesuffixes 自动生成，全库一致。
+# 不要手工编辑块内内容；改清单请用 janus.gitrule.excludes。
+# 块外内容属于本项目自己，Janus 逐字保留。
+bin/
+obj/
+venv/
+.venv/
+__pycache__/
+.vs/
+.idea/
+node_modules/
+.pytest_cache/
+.mypy_cache/
+**/tools/jdk/
+packages/
+*.dll
+*.pdb
+*.lib
+*.exp
+*.ilk
+*.idb
+*.obj
+*.cache
+*.user
+*.suo
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*.xlk
+*.autosave
+Thumbs.db
+.DS_Store
+
+# 正式消费快照由发布管线刻意入库，不受上面任何排除项影响。
+!z-*/
+!z-*/**
+# HistoryJanus managed end
+
+# z-Unused 是选择性备用模板，不随新项目继承。这些后缀原来就不入库；
+# 写在托管块之后，避免 !z-*/** 把锁文件和库文件重新放进索引。
+z-Unused/**/*.eod
+z-Unused/**/*.eox
+z-Unused/**/*.elk
+z-Unused/**/*.flk
+z-Unused/**/*.lck
+z-Unused/**/*.slk
+z-Unused/**/*.xlk

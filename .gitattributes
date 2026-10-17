@@ -1,0 +1,26 @@
+# LFS 规则：不到 100MB 的文件一律不走 LFS。
+# ≥100MB 的具体文件由下面的 HistoryJanus lfs 托管块逐条列出，其余行不得出现 filter=lfs。
+* text=auto
+
+Logo.png -text
+Unused/b-Altium-Designer/History/11-Altium-Designer1.~(1).PrjPcb.Zip -text
+Unused/b-Altium-Designer/History/Project.~(1).PrjPcb.Zip -text
+Unused/b-Altium-Designer/History/SCH.~(1).SchDoc.Zip -text
+Unused/b-Altium-Designer/History/SCH.~(2).SchDoc.Zip -text
+Unused/b-Altium-Designer/PCB.PcbDoc -text
+Unused/b-Altium-Designer/PCBL.PcbLib -text
+Unused/b-Altium-Designer/SCH.SchDoc -text
+Unused/b-Altium-Designer/SCHL.SchLib -text
+Unused/b-EPLAN/N0000.edb/Images/EPLAN.jpg -text
+Unused/b-EPLAN/N0000.edb/Images/EPLAN_LOGO.BMP -text
+Unused/b-Module-2D/工程图.dwg -text
+Unused/b-Module-NX/_model.prt -text
+Unused/b-Module-SE/0-装配体.asm -text
+Unused/b-Module-SE/0-装配体.cfg -text
+Unused/b-Module-SE/零件.par -text
+Unused/b-Module-SW/0-装配体.SLDASM -text
+Unused/b-Module-SW/零件.SLDPRT -text
+Unused/b-Module-cam/T.mcam -text
+Unused/b-Office/BOM表.xlsx -text
+Unused/b-Office/立项报告.doc -text
+Unused/b-Office/项目报告.pptx -text
