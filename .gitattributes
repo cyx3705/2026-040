@@ -1,0 +1,5 @@
+# LFS 规则：不到 100MB 的文件一律不走 LFS。
+# ≥100MB 的具体文件由下面的 HistoryJanus lfs 托管块逐条列出，其余行不得出现 filter=lfs。
+* text=auto
+
+Logo.png -text
