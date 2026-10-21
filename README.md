@@ -1,51 +1,64 @@
-# OneHistory AI-Ready 项目模板
+# Echo
 
-这是从 `0000-000-Template` 派生的 AI 优先项目模板。它保留 OneHistory 的多专业工程素材，
-同时用稳定入口、结构化清单、现行文档和可执行验证规则，让人和 AI 都能快速判断项目目标、
-真值、修改边界与完成标准。
+> 说不连贯英语也能和 AI 聊：AI 每个词带释义，你每个词有 AI 帮你接
 
+## 定位
 
-## 模板原则
+Echo 是一个本地部署的英语对话练习应用，面向英语说不连贯的人。名字取自只能借别人的话说话的厄科：
+从 AI 给出的词里挑着说，也是在说自己的话。
 
-- 根目录只提供必要入口，不要求 AI 扫描整个仓库。
-- `project.manifest.json` 声明活动目录、文档、命令、归档和生成物。
-- 根目录的可见文件夹只使用 `a-*`、`b-*`、`z-*` 三种级别。
-- `b-Office/` 只留一份 `现行约定.md`。模块的指令说明就是注册时的自描述。
-- 任何构建、测试或验收命令都必须在 manifest 中明确声明；不适用时使用 `null`。
+- 托管在 OneHistory（编号、仓库、站点、文档规则照旧），但**不做成宿主模块**：不接 Vulcan/Aurora，独立运行。
+- 全部推理在本机完成，不依赖云端模型。
+
+## 概况
+
+| 项 | 值 |
+| --- | --- |
+| 编号 | `2026-040` |
+| 角色 | 独立应用（不是宿主模块） |
+| 状态 | 规划中：选型已定，尚无代码 |
+| 推理 | 本机 Ollama，默认 `qwen3:8b` |
+| 词典 | [ECDICT](https://github.com/skywind3000/ECDICT)（MIT），SQLite 离线查 |
+| 界面 | Python 后端（uv 管依赖）+ 本地单页网页 |
+
+## 能力
+
+| 能力 | 说明 |
+| --- | --- |
+| 逐词释义 | AI 回复里每个英文词下方标词典释义，点开看完整词条 |
+| 逐词辅助造句 | 每说完一个词（空格结束）跑一次前向，列出 5 个最可能的下一个词；点选或手打都行 |
 
 ## 入口
 
 | 入口 | 用途 |
 | --- | --- |
-| [`AGENTS.md`](./AGENTS.md) | AI 读取顺序、真值规则、工作边界与完成要求 |
-| [`project.manifest.json`](./project.manifest.json) | 可机器读取的项目身份、路径、命令和上下文排除项 |
-| [`b-Office/现行约定.md`](./b-Office/现行约定.md) | 唯一的长期文档：派生后改成该项目自己的取舍 |
+| [`AGENTS.md`](./AGENTS.md) | AI 读取顺序、工作边界与完成要求 |
+| [`project.manifest.json`](./project.manifest.json) | 项目身份、目录、命令和外部依赖 |
+| [`b-Office/现行约定.md`](./b-Office/现行约定.md) | 唯一的长期文档：取舍、真机实测与已知缺口 |
 
-## 从模板建立项目
+## 目录
 
-1. 以本分支建立新的项目分支和工作树，不直接修改本模板。
-2. 修改 `project.manifest.json` 中的项目身份、类型、活动目录和命令，并将
-   `template.isTemplate` 改为 `false`。
-3. 按项目需要创建 `a-*` 子项目、`b-*` 项目组件或 `z-*` 跨项目复用元目录，使用能表达
-   职责的名称，并登记到 manifest。
-4. 替换 `b-Office/` 中全部 `{{...}}` 占位内容，删除不适用的小节。
-5. 更新根 README，使其描述真实项目，而不是模板。
-6. 执行严格验收：
+| 目录 | 职责 |
+| --- | --- |
+| `b-Office/` | 现行约定 |
+| `b-Code/` | 项目维护工具（合同检查）；业务代码将放在新建的 `b-Code-*` 组件目录 |
+
+## 构建与验证
+
+尚无代码，目前只有合同检查：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\b-Code\Test-ProjectContract.ps1 -Instantiation
 ```
 
-严格验收通过只代表项目入口和文档合同完整；产品本身仍须执行 manifest 中声明的构建、
-测试和验收命令。
+## 开发与发布
 
-## 模板验证
+尚未定。不走宿主模块的 dev 管线与发布表。
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\b-Code\Test-ProjectContract.ps1
-```
+## 要点
 
-作者：Pinavia
+- 候选词以整词为单位：模型给的是 token，半截候选要补全到空格或标点为止。
+- 预测用户输入靠续写 user 回合（`raw` 模式），生成 AI 回复走 `/api/chat` 并关思考模式。
 
 ## 保留内容
 

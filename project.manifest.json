@@ -6,14 +6,14 @@
     "strictValidationArgument": "-Instantiation"
   },
   "project": {
-    "id": "0000-001",
-    "name": "AIReady",
-    "title": "OneHistory AI-Ready \u9879\u76EE\u6A21\u677F",
+    "id": "2026-040",
+    "name": "Echo",
+    "title": "Echo：逐词辅助的英语 AI 对话",
     "kind": [
-      "template",
-      "multidisciplinary"
+      "application",
+      "local-ai"
     ],
-    "status": "template"
+    "status": "planning"
   },
   "paths": {
     "activeRoots": [
@@ -32,23 +32,39 @@
     ]
   },
   "documents": {
-    "conventions": "b-Office/\u73B0\u884C\u7EA6\u5B9A.md"
+    "conventions": "b-Office/现行约定.md"
   },
   "commands": {
     "setup": null,
     "build": null,
     "test": null,
-    "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1",
+    "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
     "run": null,
     "package": null
   },
-  "externalDependencies": [],
+  "externalDependencies": [
+    {
+      "name": "Ollama",
+      "purpose": "本地推理；/api/generate 的 raw + top_logprobs 取候选词，/api/chat 出回复",
+      "endpoint": "http://127.0.0.1:11434"
+    },
+    {
+      "name": "qwen3:8b",
+      "purpose": "默认模型（Ollama 拉取）"
+    },
+    {
+      "name": "ECDICT",
+      "purpose": "英汉词典（SQLite），MIT 许可",
+      "source": "https://github.com/skywind3000/ECDICT"
+    }
+  ],
   "contextExclusions": [
     "b-Publish/**",
     "**/bin/**",
     "**/obj/**",
     "**/node_modules/**",
     "**/.vs/**",
+    "**/.venv/**",
     "artifacts/**"
   ]
 }

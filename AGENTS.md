@@ -6,7 +6,7 @@
 
 1. 读取根目录 `project.manifest.json`，确认项目身份、状态、活动目录和可用命令。
 2. 读取根目录 `README.md` 和 `b-Office/现行约定.md`（本仓唯一的长期文档）。
-3. 跨项目查模块指令走 `diana.docs.catalog` → `diana.docs.read domain=<域>`。
+3. 本项目是独立应用，不是宿主模块：不接 Vulcan/Aurora，不注册指令。
 4. 只进入 manifest 声明的活动目录。发现未登记目录时，先确认其级别、所有者和用途。
 
 ## 真值与冲突处理
@@ -33,13 +33,10 @@
 - 无法执行的检查必须在交付时说明原因和剩余风险，不能把“未运行”写成“已通过”。
 - 任务完成时，代码、现行文档、状态和 manifest 应相互一致。
 
-## 模板模式
+## 合同检查
 
-当 `project.manifest.json` 中 `template.isTemplate` 为 `true` 时，本仓库仍是模板：
+本仓已从 `0000-001-AIReady` 实例化，改动入口文件或目录后运行严格检查：
 
-- `{{...}}` 是允许存在的实例化占位符。
-- 新增根目录时必须选择 `a-*`、`b-*` 或 `z-*` 级别，并同步登记到 manifest。
-- 修改模板后运行普通合同检查。
-
-派生实际项目后，必须将 `template.isTemplate` 改为 `false`、替换全部占位符，并运行带
-`-Instantiation` 参数的严格检查。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\b-Code\Test-ProjectContract.ps1 -Instantiation
+```
