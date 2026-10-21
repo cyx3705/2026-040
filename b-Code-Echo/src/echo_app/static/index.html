@@ -20,13 +20,15 @@
   <header class="nav">
     <div class="wrap nav-in">
       <div class="brand">
-        <span class="brand-no">2026-040</span>
         <span class="brand-name">Echo</span>
       </div>
       <div class="nav-right">
         <span class="engine" id="engine" data-state="checking">
           <span class="dot" aria-hidden="true"></span><span id="engine-text">检查引擎…</span>
         </span>
+        <button class="text-btn" id="open-dict" aria-label="打开词典，查看学会的词">
+          词典<span class="count" id="learned-count">0</span>
+        </button>
         <button class="icon-btn" id="new-chat" aria-label="新对话" title="新对话">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -46,14 +48,36 @@
     <div class="log" id="log" aria-live="polite">
       <div class="empty" id="empty">
         <p class="empty-title">用英语说点什么吧</p>
-        <p class="empty-note">AI 会用简单的英语回你。说不完整也没关系。</p>
+        <p class="empty-note">AI 会用简单的英语回你，每个词下面都有中文。认识的词点一下，中文就收起来。</p>
       </div>
     </div>
   </main>
 
+  <dialog class="dict" id="dict" aria-labelledby="dict-title">
+    <div class="section-head">
+      <h2 id="dict-title">词典</h2>
+      <div class="ink-bar"><span>学会 <b class="num" id="dict-count">0</b> 个词</span></div>
+      <button class="icon-btn" id="close-dict" aria-label="关闭词典">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="dict-note">点掉一个词，它就回到「没学会」，对话里重新带上中文。</p>
+    <ul class="dict-list" id="dict-list"></ul>
+    <div class="empty" id="dict-empty" hidden>
+      <p class="empty-title">还没有学会的词</p>
+      <p class="empty-note">在 AI 的回复里点一下认识的词，它就会记到这里。</p>
+    </div>
+  </dialog>
+
   <footer class="composer">
     <form class="wrap composer-in" id="form">
-      <textarea id="input" rows="1" placeholder="Type in English…  Enter 发送，Shift+Enter 换行" autocomplete="off"></textarea>
+      <div class="compose-box">
+        <div class="suggest" id="suggest">
+          <ol class="suggest-list" id="suggest-list" role="listbox" aria-label="下一个词的候选"></ol>
+          <span class="suggest-hint"><kbd>Shift</kbd>+<kbd>W</kbd>/<kbd>S</kbd> 选 · <kbd>Tab</kbd> 确认</span>
+        </div>
+        <textarea id="input" rows="1" placeholder="Type in English…  空格结束一个词，Enter 发送" autocomplete="off" spellcheck="false"></textarea>
+      </div>
       <button class="btn" id="send" type="submit">发送</button>
     </form>
   </footer>

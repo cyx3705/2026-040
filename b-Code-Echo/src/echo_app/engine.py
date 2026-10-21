@@ -37,6 +37,7 @@ class Engine:
             OLLAMA_HOST=f"{config.ENGINE_HOST}:{config.ENGINE_PORT}",
             OLLAMA_MODELS=str(config.MODELS_DIR),
             OLLAMA_KEEP_ALIVE=config.KEEP_ALIVE,
+            OLLAMA_NUM_PARALLEL=str(config.ENGINE_PARALLEL),
         )
         log = open(config.ENGINE_LOG, "ab")
         self._proc = subprocess.Popen(
@@ -72,7 +73,7 @@ class Engine:
 
     def status(self) -> dict:
         if not self.installed:
-            return {"state": "missing", "detail": "引擎未安装，先运行 echo-setup"}
+            return {"state": "missing", "detail": f"引擎未安装（找不到 {config.ENGINE_EXE}），先运行 echo-setup"}
         if not self.running():
             return {"state": "stopped", "detail": "引擎没有在运行"}
         if config.MODEL not in self.models():

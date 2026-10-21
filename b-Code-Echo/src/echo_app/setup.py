@@ -14,6 +14,7 @@ from pathlib import Path
 import httpx
 
 from . import config
+from .dictionary import build_db
 from .engine import Engine
 
 ENGINE_VERSION = "0.40.7"
@@ -71,7 +72,10 @@ def download(url: str, dst: Path, chunk: int = 8 << 20, retries: int = 20) -> No
     """分段续传下载：本机出网大传输会断，靠 Range 分段加重试，而不是加超时。"""
     dst.parent.mkdir(parents=True, exist_ok=True)
     part = dst.with_suffix(dst.suffix + ".part")
-    with httpx.Client(follow_redirects=True, timeout=30) as client:
+    # identity：不让服务器压缩，Range 的字节偏移才对得上文件本身
+    with httpx.Client(
+        follow_redirects=True, timeout=30, headers={"Accept-Encoding": "identity"}
+    ) as client:
         total = int(client.head(url).headers["content-length"])
         failures = 0
         while (done := part.stat().st_size if part.exists() else 0) < total:
@@ -134,7 +138,22 @@ def pull_model(model: str) -> None:
     print()
 
 
+def install_dictionary() -> None:
+    if config.DICT_DB.is_file():
+        print(f"词典已在 {config.DICT_DB}")
+        return
+    csv_path = config.DICT_DB.with_name("ecdict.csv")
+    if not csv_path.is_file():
+        print("下载 ECDICT 词典（约 66MB）")
+        download(config.DICT_CSV_URL, csv_path, chunk=4 << 20)
+    print("建立词典索引…")
+    rows = build_db(csv_path, config.DICT_DB)
+    csv_path.unlink()
+    print(f"词典就绪：{rows} 条")
+
+
 def main() -> None:
+    install_dictionary()
     install_engine()
     engine = Engine()
     if config.MODEL not in (engine.models() if engine.running() else []):

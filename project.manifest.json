@@ -47,7 +47,7 @@
   "externalDependencies": [
     {
       "name": "Ollama（自带）",
-      "purpose": "私有推理实例：%LOCALAPPDATA%\\Echo\\engine，端口 11540，模型目录 %LOCALAPPDATA%\\Echo\\models；不用本机 Ollama 的服务",
+      "purpose": "私有推理实例：%USERPROFILE%\\.echo\\engine，端口 11540，模型目录 %USERPROFILE%\\.echo\\models；不用本机 Ollama 的服务",
       "endpoint": "http://127.0.0.1:11540"
     },
     {
