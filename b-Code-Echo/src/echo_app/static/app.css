@@ -1,0 +1,127 @@
+/* 令牌取自 OneHistory 视觉识别（2026-031-OneHistorySite/z-OneHistoryID），不引入新颜色。 */
+:root, :root[data-theme="light"] {
+  --canvas: #FBFAF7; --surface: #F3F1EC; --surface-2: #EBE9E4; --surface-hover: #E5E3DE;
+  --text: #26231E; --text-2: #6A6458;
+  --accent: #7F5E0F; --accent-hover: #6A4E0C; --accent-soft: rgba(127,94,15,.34); --accent-wash: rgba(127,94,15,.08);
+  --hairline: #E5E3DE; --hairline-2: #D5D1C8; --code-bg: #EBE9E4;
+  --ink: var(--text); --on-ink: #FBFAF7; --accent-on-ink: #D9A441; --text-2-on-ink: #ACA593;
+}
+:root[data-theme="dark"] {
+  --canvas: #121414; --surface: #1D201F; --surface-2: #191C1B; --surface-hover: #2A2D2C;
+  --text: #E2DAC6; --text-2: #ACA593;
+  --accent: #D9A441; --accent-hover: #E8B65C; --accent-soft: rgba(217,164,65,.38); --accent-wash: rgba(217,164,65,.10);
+  --hairline: #2A2D2C; --hairline-2: #343936; --code-bg: #171A19;
+  --ink: var(--text); --on-ink: #121414; --accent-on-ink: #7F5E0F; --text-2-on-ink: #6A6458;
+}
+
+:root {
+  --r-card: 16px; --r-ctl: 10px; --r-bar: 7px; --r-sm: 5px;
+  --ease: cubic-bezier(.22,.7,.3,1);
+  /* 本地应用不连外网字体：Noto Sans SC / Outfit 装了就用，否则落到 Windows 自带字体 */
+  --font: "Noto Sans SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  /* 英文对话正文西文字体打头：中文字体把 ’ 排成全角，"That’s" 会裂成 "That’ s" */
+  --font-en: "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-num: "Outfit", "Bahnschrift", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; display: flex; flex-direction: column;
+  background: var(--canvas); color: var(--text);
+  font: 17px/1.6 var(--font);
+}
+button, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--r-sm); }
+
+.wrap { width: 100%; max-width: 860px; margin-inline: auto; padding-inline: clamp(16px, 4vw, 48px); }
+
+/* 导航 */
+.nav {
+  position: sticky; top: 0; z-index: 2; height: 62px; flex: none;
+  background: color-mix(in srgb, var(--canvas) 90%, transparent); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--hairline-2);
+}
+.nav-in { height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand-no { font: 600 13px var(--font-num); letter-spacing: .05em; color: var(--accent); }
+.brand-name { font-size: 21px; font-weight: 650; letter-spacing: -.02em; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+
+.engine { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: var(--text-2); margin-right: 4px; }
+.engine .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--text-2); }
+.engine[data-state="ready"] .dot { background: var(--accent); border-color: var(--accent); }
+.engine[data-state="error"] { color: var(--text); }
+.engine[data-state="error"] .dot { background: var(--ink); border-color: var(--ink); }
+
+.icon-btn {
+  width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer;
+  background: transparent; border: 1px solid var(--hairline-2); border-radius: var(--r-ctl);
+  transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease);
+}
+.icon-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn:hover { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+
+/* 段标题 + 墨色条：本页唯一的大墨色块 */
+.chat { flex: 1; padding-top: 28px; padding-bottom: 24px; }
+.section-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+.section-head h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.02em; line-height: 1.3; }
+.ink-bar {
+  flex: 1; height: 29px; border-radius: var(--r-bar); background: var(--ink);
+  display: flex; align-items: center; justify-content: flex-end; padding-inline: 12px;
+  font-size: 13px; color: var(--on-ink);
+}
+
+/* 对话记录 */
+.log { display: flex; flex-direction: column; gap: 18px; }
+.msg { max-width: 76ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-body, textarea { font-family: var(--font-en); }
+.msg-role { display: block; font: 600 12px var(--font-num); letter-spacing: .05em; color: var(--accent); margin-bottom: 4px; }
+.msg-ai { align-self: flex-start; }
+.msg-ai .msg-body { font-size: 18px; line-height: 1.7; }
+.msg-me {
+  align-self: flex-end; padding: 10px 16px; border: 1px solid var(--hairline-2);
+  border-radius: var(--r-card); background: var(--surface);
+}
+.msg-me .msg-role { text-align: right; }
+.msg-error { align-self: stretch; padding: 10px 16px; border: 1px solid var(--ink); border-radius: var(--r-card); font-size: 15px; }
+.msg.pending .msg-body::after {
+  content: ""; display: inline-block; width: 7px; height: 1.1em; margin-left: 3px; vertical-align: -.15em;
+  background: var(--ink); border-radius: 1.5px; animation: blink 1s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.empty { border: 1px solid var(--hairline-2); border-radius: var(--r-card); padding: 34px 20px; text-align: center; }
+.empty-title { margin: 0; font-size: 19px; font-weight: 650; }
+.empty-note { margin: 6px 0 0; font-size: 15px; color: var(--text-2); }
+
+/* 输入区 */
+.composer {
+  position: sticky; bottom: 0; flex: none; padding-block: 14px 18px;
+  background: color-mix(in srgb, var(--canvas) 94%, transparent); backdrop-filter: blur(16px);
+  border-top: 1px solid var(--hairline-2);
+}
+.composer-in { display: flex; gap: 10px; align-items: flex-end; }
+textarea {
+  flex: 1; resize: none; min-height: 48px; max-height: 180px; padding: 11px 14px; line-height: 1.5;
+  background: var(--surface); border: 1px solid var(--hairline-2); border-radius: var(--r-ctl);
+  transition: background .2s var(--ease), border-color .2s var(--ease);
+}
+textarea::placeholder { color: var(--text-2); }
+textarea:focus { outline: none; background: var(--canvas); border-color: var(--ink); }
+.btn {
+  height: 48px; padding-inline: 20px; cursor: pointer; font-weight: 600;
+  background: transparent; border: 1px solid var(--ink); border-radius: var(--r-ctl);
+  transition: background .2s var(--ease), color .2s var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--ink); color: var(--on-ink); }
+.btn:disabled { opacity: .45; cursor: default; }
+
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  .nav { height: 54px; }
+  .engine #engine-text { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg.pending .msg-body::after { animation: none; }
+}

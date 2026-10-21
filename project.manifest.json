@@ -13,15 +13,17 @@
       "application",
       "local-ai"
     ],
-    "status": "planning"
+    "status": "developing"
   },
   "paths": {
     "activeRoots": [
       "b-Office",
-      "b-Code"
+      "b-Code",
+      "b-Code-Echo"
     ],
     "sourceRoots": [
-      "b-Code"
+      "b-Code",
+      "b-Code-Echo"
     ],
     "generatedRoots": [],
     "archiveRoots": [],
@@ -35,18 +37,18 @@
     "conventions": "b-Office/现行约定.md"
   },
   "commands": {
-    "setup": null,
+    "setup": "uv run --project b-Code-Echo echo-setup",
     "build": null,
     "test": null,
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
-    "run": null,
+    "run": "uv run --project b-Code-Echo echo-serve",
     "package": null
   },
   "externalDependencies": [
     {
-      "name": "Ollama",
-      "purpose": "本地推理；/api/generate 的 raw + top_logprobs 取候选词，/api/chat 出回复",
-      "endpoint": "http://127.0.0.1:11434"
+      "name": "Ollama（自带）",
+      "purpose": "私有推理实例：%LOCALAPPDATA%\\Echo\\engine，端口 11540，模型目录 %LOCALAPPDATA%\\Echo\\models；不用本机 Ollama 的服务",
+      "endpoint": "http://127.0.0.1:11540"
     },
     {
       "name": "qwen3:8b",

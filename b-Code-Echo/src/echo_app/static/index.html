@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Echo</title>
+  <script>
+    // 首帧前定主题，避免闪白
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem("echo-theme"); } catch (e) {}
+      if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-in">
+      <div class="brand">
+        <span class="brand-no">2026-040</span>
+        <span class="brand-name">Echo</span>
+      </div>
+      <div class="nav-right">
+        <span class="engine" id="engine" data-state="checking">
+          <span class="dot" aria-hidden="true"></span><span id="engine-text">检查引擎…</span>
+        </span>
+        <button class="icon-btn" id="new-chat" aria-label="新对话" title="新对话">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn" id="theme" aria-label="切换主题" title="切换主题">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap chat">
+    <div class="section-head">
+      <h1>对话</h1>
+      <div class="ink-bar"><span id="model-note">本地模型</span></div>
+    </div>
+
+    <div class="log" id="log" aria-live="polite">
+      <div class="empty" id="empty">
+        <p class="empty-title">用英语说点什么吧</p>
+        <p class="empty-note">AI 会用简单的英语回你。说不完整也没关系。</p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="composer">
+    <form class="wrap composer-in" id="form">
+      <textarea id="input" rows="1" placeholder="Type in English…  Enter 发送，Shift+Enter 换行" autocomplete="off"></textarea>
+      <button class="btn" id="send" type="submit">发送</button>
+    </form>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

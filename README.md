@@ -16,8 +16,8 @@ Echo 是一个本地部署的英语对话练习应用，面向英语说不连贯
 | --- | --- |
 | 编号 | `2026-040` |
 | 角色 | 独立应用（不是宿主模块） |
-| 状态 | 规划中：选型已定，尚无代码 |
-| 推理 | 本机 Ollama，默认 `qwen3:8b` |
+| 状态 | 开发中：最简单的英语对话已能跑 |
+| 推理 | 自带的 Ollama 私有实例（不依赖本机 Ollama 服务），默认 `qwen3:8b` |
 | 词典 | [ECDICT](https://github.com/skywind3000/ECDICT)（MIT），SQLite 离线查 |
 | 界面 | Python 后端（uv 管依赖）+ 本地单页网页 |
 
@@ -25,8 +25,9 @@ Echo 是一个本地部署的英语对话练习应用，面向英语说不连贯
 
 | 能力 | 说明 |
 | --- | --- |
-| 逐词释义 | AI 回复里每个英文词下方标词典释义，点开看完整词条 |
-| 逐词辅助造句 | 每说完一个词（空格结束）跑一次前向，列出 5 个最可能的下一个词；点选或手打都行 |
+| 英语对话（已有） | 本地模型用简单英语流式回复，并接着提问把话题聊下去 |
+| 逐词释义（待做） | AI 回复里每个英文词下方标词典释义，点开看完整词条 |
+| 逐词辅助造句（待做） | 每说完一个词（空格结束）跑一次前向，列出 5 个最可能的下一个词；点选或手打都行 |
 
 ## 入口
 
@@ -41,11 +42,21 @@ Echo 是一个本地部署的英语对话练习应用，面向英语说不连贯
 | 目录 | 职责 |
 | --- | --- |
 | `b-Office/` | 现行约定 |
-| `b-Code/` | 项目维护工具（合同检查）；业务代码将放在新建的 `b-Code-*` 组件目录 |
+| `b-Code/` | 项目维护工具（合同检查） |
+| `b-Code-Echo/` | 应用本体：Python 包 `echo_app`（引擎管理、对话接口、页面） |
+
+引擎、模型和引擎日志放在 `%LOCALAPPDATA%\Echo\`，不进仓。
 
 ## 构建与验证
 
-尚无代码，目前只有合同检查：
+需要 [uv](https://docs.astral.sh/uv/)。首次运行先装引擎和模型，之后直接启动：
+
+```powershell
+uv run --project b-Code-Echo echo-setup
+uv run --project b-Code-Echo echo-serve
+```
+
+启动后浏览器打开 `http://127.0.0.1:8040`。还没有自动测试；合同检查：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\b-Code\Test-ProjectContract.ps1 -Instantiation
