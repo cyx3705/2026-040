@@ -1,6 +1,6 @@
 [project]
 name = "echo-app"
-version = "0.1.0"
+version = "0.3.0"
 description = "Echo：逐词辅助的英语 AI 对话（本地自带推理引擎）"
 requires-python = ">=3.12"
 dependencies = [
