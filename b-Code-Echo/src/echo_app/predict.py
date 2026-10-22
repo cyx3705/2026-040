@@ -14,7 +14,7 @@ from . import config
 
 TOP_N = 20       # 第一步多取一些：去重、过滤后要凑满 5 个
 EXPAND_MAX = 6   # 补全一个词最多再生成几个 token
-WORD_END = [" ", "\n", ",", ".", "?", "!", ";", ":", '"', "<|im_end|>"]
+WORD_END = [" ", "\n", ",", ".", "?", "!", ";", ":", '"', "<|im_end|>", "<turn|>", "<end_of_turn>"]
 PUNCT = {".", ",", "?", "!"}
 _PARTIAL = re.compile(r"[A-Za-z']+$")
 _LEAD = re.compile(r"^[A-Za-z']*")
@@ -31,21 +31,43 @@ def _shared_client() -> httpx.AsyncClient:
     return _client
 
 
-def chatml(messages: list[dict], user_text: str) -> str:
-    """按 qwen3 的 ChatML 模板拼 prompt，结尾停在 user 回合里，不闭合。
+def template_of(family: str) -> str | None:
+    """模型族 → 对话模板。续写 user 回合要自己拼 prompt，所以只支持认得模板的模型族。"""
+    if family.startswith("qwen"):
+        return "chatml"
+    if family.startswith("gemma4"):
+        return "gemma4"
+    if family.startswith("gemma"):
+        return "gemma"
+    return None
 
-    历史里的 assistant 回合不带 think 块，和 /api/chat 设 think:false 时模型看到的一致。
+
+def render(template: str, system: str, messages: list[dict], user_text: str) -> str:
+    """按模型自己的聊天模板拼 prompt，结尾停在 user 回合里，不闭合。
+
+    历史里的 assistant 回合不带思考块，和 /api/chat 设 think:false 时模型看到的一致。
     """
-    parts = [f"<|im_start|>system\n{config.SYSTEM_PROMPT}<|im_end|>\n"]
-    for m in messages:
-        parts.append(f"<|im_start|>{m['role']}\n{m['content']}<|im_end|>\n")
-    parts.append(f"<|im_start|>user\n{user_text}")
-    return "".join(parts)
+    if template == "chatml":  # qwen
+        turn = lambda role, text: f"<|im_start|>{role}\n{text}<|im_end|>\n"
+        head, open_user = turn("system", system), "<|im_start|>user\n"
+    elif template == "gemma4":
+        turn = lambda role, text: f"<|turn>{'model' if role == 'assistant' else role}\n{text}<turn|>\n"
+        # gemma4 每个回合开头都要先出一个思考块（关了思考也是个空块）。不替它写好，
+        # 回合第一个词的候选几乎全被 <|channel> 占掉，剩下的是 thought、stone 这种碎片。
+        head, open_user = turn("system", system), "<|turn>user\n<|channel>thought\n<channel|>"
+    else:  # gemma 2/3 没有 system 角色：系统提示词并进第一个 user 回合
+        turn = lambda role, text: f"<start_of_turn>{'model' if role == 'assistant' else role}\n{text}<end_of_turn>\n"
+        head, open_user = "", "<start_of_turn>user\n"
+        if messages:
+            messages = [{**messages[0], "content": f"{system}\n\n{messages[0]['content']}"}, *messages[1:]]
+        else:
+            user_text = f"{system}\n\n{user_text}"
+    return head + "".join(turn(m["role"], m["content"]) for m in messages) + open_user + user_text
 
 
-async def _generate(client: httpx.AsyncClient, prompt: str, **options) -> dict:
+async def _generate(client: httpx.AsyncClient, model: str, prompt: str, **options) -> dict:
     body = {
-        "model": config.MODEL,
+        "model": model,
         "prompt": prompt,
         "raw": True,
         "stream": False,
@@ -61,7 +83,9 @@ async def _generate(client: httpx.AsyncClient, prompt: str, **options) -> dict:
     return resp.json()
 
 
-async def suggest(messages: list[dict], text: str, k: int = 5, complete=None) -> list[dict]:
+async def suggest(
+    model: str, template: str, system: str, messages: list[dict], text: str, k: int = 5, complete=None
+) -> list[dict]:
     """text 以空格结尾（或为空）时预测下一个词；以字母结尾时补全正在打的词。
 
     补全时不能把半截词直接喂给模型：prompt 断在 token 中间，模型续得很差
@@ -72,10 +96,10 @@ async def suggest(messages: list[dict], text: str, k: int = 5, complete=None) ->
     partial = m.group(0) if m and not text[-1:].isspace() else ""
     before = (text[: len(text) - len(partial)] if partial else text).rstrip()
     at_start = not before
-    prompt = chatml(messages, before)
+    prompt = render(template, system, messages, before)
 
     client = _shared_client()
-    first = await _generate(client, prompt, num_predict=1, top_logprobs=TOP_N)
+    first = await _generate(client, model, prompt, num_predict=1, top_logprobs=TOP_N)
     tops = first.get("logprobs", [{}])[0].get("top_logprobs", [])
 
     picked = []  # (token, logprob, kind)
@@ -87,13 +111,15 @@ async def suggest(messages: list[dict], text: str, k: int = 5, complete=None) ->
             continue
         if not body or not _LEAD.fullmatch(body) or not (tok.startswith(" ") or at_start):
             continue  # 换行、特殊符号、接在上个词后面的半截
+        if at_start and not partial and not body[0].isupper():
+            continue  # 回合开头的词不带空格，小写的多是半截（sem → sembly）；句首词本该大写
         if partial and not (body.lower().startswith(partial.lower()) or partial.lower().startswith(body.lower())):
             continue
         picked.append((tok, lp, "word"))
 
     # 各候选并行补全到词边界（引擎开了多槽并行）
     async def expand(tok: str) -> str:
-        res = await _generate(client, prompt + tok, num_predict=EXPAND_MAX, stop=WORD_END)
+        res = await _generate(client, model, prompt + tok, num_predict=EXPAND_MAX, stop=WORD_END)
         return tok.lstrip(" ") + _LEAD.match(res.get("response", "")).group(0)
 
     # 多补几个备用：补全后可能撞车（make / makes 去重后不够 5 个）

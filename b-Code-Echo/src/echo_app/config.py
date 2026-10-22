@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+from .levels import describe
+
 # 引擎和模型都放在 Echo 自己的数据目录，不碰本机已装的 Ollama。
 # 不放 %LOCALAPPDATA%：从打包应用（如 Claude 桌面版）里启动的进程写 AppData 会被重定向到
 # 应用私有目录，快捷方式启动的 Echo 就看不到。和 Ollama 的 ~/.ollama 一样放用户目录。
@@ -25,13 +27,14 @@ ENGINE_URL = f"http://{ENGINE_HOST}:{ENGINE_PORT}"
 
 WEB_PORT = int(os.environ.get("ECHO_WEB_PORT", "8040"))
 
+# 默认模型；页面上换过之后记在 user.db 的设置里。
 MODEL = os.environ.get("ECHO_MODEL", "qwen3:8b")
 KEEP_ALIVE = "30m"
 # 引擎并行槽数：输入预测的 5 个候选同时补全。每个槽各占一份 KV 缓存（4096 上下文约 0.6GB）。
 ENGINE_PARALLEL = 5
 
-SYSTEM_PROMPT = (
-    "You are Echo, a patient English conversation partner for a Chinese learner "
-    "whose English is not yet fluent. Always reply in simple, natural English, "
-    "in two or three short sentences, and keep the conversation going with a question."
-)
+
+def system_prompt(level: str, length: int = 0) -> str:
+    """难度和回答长度的要求见 levels.py。"""
+    return ("You are Echo, a patient English conversation partner for a Chinese learner. "
+            "Always reply in English. " + describe(level, length))

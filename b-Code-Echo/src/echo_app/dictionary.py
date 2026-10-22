@@ -3,6 +3,7 @@
 import csv
 import re
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -92,9 +93,11 @@ def build_db(csv_path: Path, db_path: Path) -> int:
 
 class Dictionary:
     def __init__(self) -> None:
-        self._dict: sqlite3.Connection | None = None
+        # 词典连接每个线程一个：接口在线程池里并发查词，共用一个连接会报 API misuse
+        self._local = threading.local()
         config.USER_DB.parent.mkdir(parents=True, exist_ok=True)
         self._user = sqlite3.connect(config.USER_DB, check_same_thread=False)
+        self._user_lock = threading.Lock()
         self._user.execute(
             "CREATE TABLE IF NOT EXISTS learned (lemma TEXT PRIMARY KEY, learned_at REAL)"
         )
@@ -105,11 +108,10 @@ class Dictionary:
         return config.DICT_DB.is_file()
 
     def _con(self) -> sqlite3.Connection:
-        if self._dict is None:
-            self._dict = sqlite3.connect(
-                f"file:{config.DICT_DB}?mode=ro", uri=True, check_same_thread=False
-            )
-        return self._dict
+        con = getattr(self._local, "con", None)
+        if con is None:
+            con = self._local.con = sqlite3.connect(f"file:{config.DICT_DB}?mode=ro", uri=True)
+        return con
 
     def _row(self, word: str) -> tuple | None:
         return self._con().execute(
@@ -185,9 +187,10 @@ class Dictionary:
         return {w: self.lookup(w) for w in dict.fromkeys(words)}
 
     def learned(self) -> list[dict]:
-        rows = self._user.execute(
-            "SELECT lemma FROM learned ORDER BY learned_at DESC"
-        ).fetchall()
+        with self._user_lock:
+            rows = self._user.execute(
+                "SELECT lemma FROM learned ORDER BY learned_at DESC"
+            ).fetchall()
         result = []
         for (lemma,) in rows:
             entry = self.lookup(lemma) if self.installed else None
@@ -195,10 +198,11 @@ class Dictionary:
         return result
 
     def set_learned(self, lemma: str, learned: bool) -> None:
-        if learned:
-            self._user.execute(
-                "INSERT OR REPLACE INTO learned VALUES (?, ?)", (lemma, time.time())
-            )
-        else:
-            self._user.execute("DELETE FROM learned WHERE lemma = ?", (lemma,))
-        self._user.commit()
+        with self._user_lock:
+            if learned:
+                self._user.execute(
+                    "INSERT OR REPLACE INTO learned VALUES (?, ?)", (lemma, time.time())
+                )
+            else:
+                self._user.execute("DELETE FROM learned WHERE lemma = ?", (lemma,))
+            self._user.commit()

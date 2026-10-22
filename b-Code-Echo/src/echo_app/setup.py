@@ -100,6 +100,22 @@ def manifest_rel(model: str) -> Path:
     return Path("registry.ollama.ai") / "library" / name / (tag or "latest")
 
 
+def local_models() -> list[dict]:
+    """本机 Ollama 已下载的模型（只看官方库里的），可以一键链接进 Echo。"""
+    root = LOCAL_MODELS / "manifests" / "registry.ollama.ai" / "library"
+    found = []
+    for manifest in sorted(root.glob("*/*")) if root.is_dir() else []:
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            blob = LOCAL_MODELS / "blobs" / data["config"]["digest"].replace(":", "-")
+            family = json.loads(blob.read_text(encoding="utf-8")).get("model_family", "")
+        except (OSError, ValueError, KeyError):
+            continue
+        size = sum(layer.get("size", 0) for layer in data.get("layers", []))
+        found.append({"name": f"{manifest.parent.name}:{manifest.name}", "size": size, "family": family})
+    return found
+
+
 def import_local_model(model: str) -> bool:
     """把本机 Ollama 已下载的模型链接进 Echo 的模型目录。"""
     manifest = LOCAL_MODELS / "manifests" / manifest_rel(model)
@@ -156,13 +172,13 @@ def main() -> None:
     install_dictionary()
     install_engine()
     engine = Engine()
-    if config.MODEL not in (engine.models() if engine.running() else []):
+    if config.MODEL not in ({m["name"] for m in engine.models()} if engine.running() else set()):
         if not import_local_model(config.MODEL):
             engine.start()
             pull_model(config.MODEL)
     engine.start()
     try:
-        status = engine.status()
+        status = engine.status(config.MODEL)
     finally:
         engine.stop()
     print(status["detail"])

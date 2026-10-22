@@ -18,19 +18,20 @@
 </head>
 <body>
   <header class="nav">
-    <div class="wrap nav-in">
+    <div class="nav-in">
       <div class="brand">
+        <button class="icon-btn side-toggle" id="side-toggle" aria-label="对话历史" title="对话历史" aria-controls="side" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
         <span class="brand-name">Echo</span>
       </div>
       <div class="nav-right">
         <span class="engine" id="engine" data-state="checking">
           <span class="dot" aria-hidden="true"></span><span id="engine-text">检查引擎…</span>
         </span>
+        <button class="text-btn" id="open-words" aria-label="打开单词表，导入或挑词练习">单词表</button>
         <button class="text-btn" id="open-dict" aria-label="打开词典，查看学会的词">
           词典<span class="count" id="learned-count">0</span>
-        </button>
-        <button class="icon-btn" id="new-chat" aria-label="新对话" title="新对话">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
         <button class="icon-btn" id="theme" aria-label="切换主题" title="切换主题">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
@@ -39,19 +40,86 @@
     </div>
   </header>
 
-  <main class="wrap chat">
-    <div class="section-head">
-      <h1>对话</h1>
-      <div class="ink-bar"><span id="model-note">本地模型</span></div>
-    </div>
+  <div class="shell">
+    <aside class="side" id="side" aria-label="对话历史">
+      <button class="new-chat" id="new-chat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新对话
+      </button>
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+        <input type="search" id="search" placeholder="搜索对话" autocomplete="off" spellcheck="false" aria-label="搜索对话">
+      </label>
+      <ol class="conv-list" id="conv-list"></ol>
+      <p class="conv-empty" id="conv-empty" hidden></p>
+    </aside>
 
-    <div class="log" id="log" aria-live="polite">
-      <div class="empty" id="empty">
-        <p class="empty-title">用英语说点什么吧</p>
-        <p class="empty-note">AI 会用简单的英语回你，每个词下面都有中文。认识的词点一下，中文就收起来。</p>
-      </div>
+    <div class="main-col">
+      <main class="chat">
+        <!-- 标题、模型条、练习词常驻在顶上，不随对话滚走 -->
+        <div class="chat-head">
+          <div class="wrap">
+            <div class="section-head">
+              <h1 id="chat-title">对话</h1>
+              <div class="ink-bar">
+                <button class="model-btn" id="model-btn" aria-haspopup="listbox" aria-expanded="false" title="选择模型">
+                  <span id="model-note">本地模型</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
+                </button>
+                <div class="model-menu" id="model-menu" role="listbox" aria-label="选择模型" hidden></div>
+              </div>
+            </div>
+            <div class="targets" id="targets" hidden>
+              <span class="targets-label">练习词<b class="num" id="targets-count">0/0</b></span>
+              <ol class="target-list" id="target-list" aria-label="这段对话要练的词"></ol>
+            </div>
+          </div>
+        </div>
+
+        <div class="wrap log" id="log" aria-live="polite">
+          <div class="empty" id="empty">
+            <p class="empty-title">用英语说点什么吧</p>
+            <p class="empty-note">AI 会用简单的英语回你，每个词下面都有中文。认识的词点一下，中文就收起来。</p>
+          </div>
+        </div>
+      </main>
+
+      <footer class="composer">
+        <form class="wrap composer-in" id="form">
+          <div class="level-picker">
+            <button type="button" class="level-btn" id="level-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="level-panel" title="选择对话难度">
+              <span class="level-label">难度</span>
+              <span class="level-value" id="level-value">…</span>
+              <span class="level-length" id="level-length">长度 自动</span>
+            </button>
+            <div class="level-panel" id="level-panel" role="dialog" aria-label="对话难度和回答长度" hidden>
+              <div class="level-tabs" id="level-tabs" role="tablist" aria-label="评价标准"></div>
+              <div class="level-grid" id="level-grid" role="radiogroup"></div>
+              <p class="level-note" id="level-note"></p>
+              <div class="length-box">
+                <div class="length-head">
+                  <label for="length">回答长度</label>
+                  <span class="length-name" id="length-name">自动</span>
+                </div>
+                <input type="range" id="length" min="0" max="5" step="1" value="0" aria-describedby="length-note">
+                <div class="length-ticks" id="length-ticks" aria-hidden="true"></div>
+                <p class="level-note" id="length-note"></p>
+              </div>
+            </div>
+          </div>
+          <div class="compose-box">
+            <div class="suggest" id="suggest">
+              <ol class="suggest-list" id="suggest-list" role="listbox" aria-label="下一个词的候选"></ol>
+              <span class="suggest-hint"><kbd>Shift</kbd>+<kbd>W</kbd>/<kbd>S</kbd> 选 · <kbd>Tab</kbd> 确认</span>
+            </div>
+            <div class="compose-row">
+              <textarea id="input" rows="1" placeholder="Type in English…  空格结束一个词，Enter 发送" autocomplete="off" spellcheck="false"></textarea>
+              <button class="btn send-btn" id="send" type="submit">发送</button>
+            </div>
+          </div>
+        </form>
+      </footer>
     </div>
-  </main>
+  </div>
 
   <dialog class="dict" id="dict" aria-labelledby="dict-title">
     <div class="section-head">
@@ -69,18 +137,32 @@
     </div>
   </dialog>
 
-  <footer class="composer">
-    <form class="wrap composer-in" id="form">
-      <div class="compose-box">
-        <div class="suggest" id="suggest">
-          <ol class="suggest-list" id="suggest-list" role="listbox" aria-label="下一个词的候选"></ol>
-          <span class="suggest-hint"><kbd>Shift</kbd>+<kbd>W</kbd>/<kbd>S</kbd> 选 · <kbd>Tab</kbd> 确认</span>
-        </div>
-        <textarea id="input" rows="1" placeholder="Type in English…  空格结束一个词，Enter 发送" autocomplete="off" spellcheck="false"></textarea>
-      </div>
-      <button class="btn" id="send" type="submit">发送</button>
-    </form>
-  </footer>
+  <dialog class="dict words" id="words" aria-labelledby="words-title">
+    <div class="section-head">
+      <h2 id="words-title">单词表</h2>
+      <div class="ink-bar"><span id="words-summary">从 Word 导入单词表，挑几个词专门练</span></div>
+      <button class="icon-btn" id="close-words" aria-label="关闭单词表">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="words-tools">
+      <div class="wl-tabs" id="wl-tabs" role="tablist" aria-label="单词表"></div>
+      <label class="text-btn import-btn" title="导入 .docx 单词表：每段一个词，或者表格里一行一个词">
+        导入 Word<input type="file" id="import-file" accept=".docx" hidden>
+      </label>
+    </div>
+    <p class="dict-note" id="import-note" hidden></p>
+    <div class="groups" id="groups" role="tablist" aria-label="分组"></div>
+    <ul class="word-grid" id="word-grid"></ul>
+    <div class="empty" id="words-empty" hidden>
+      <p class="empty-title">还没有单词表</p>
+      <p class="empty-note">点「导入 Word」选一个 .docx：每段一个词，或者表格里一行一个词（可带音标和释义）。</p>
+    </div>
+    <div class="words-foot" id="words-foot" hidden>
+      <span class="pick-note" id="pick-note"></span>
+      <button class="btn" id="start-practice">开始练习</button>
+    </div>
+  </dialog>
 
   <script src="/static/app.js"></script>
 </body>

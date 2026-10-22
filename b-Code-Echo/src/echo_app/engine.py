@@ -66,25 +66,42 @@ class Engine:
                 self._proc.kill()
         self._proc = None
 
-    def models(self) -> list[str]:
+    def models(self) -> list[dict]:
+        """私有实例里装好的模型：名字、大小、模型族（选对话模板要用）。"""
         resp = httpx.get(f"{config.ENGINE_URL}/api/tags", timeout=5)
         resp.raise_for_status()
-        return [m["name"] for m in resp.json().get("models", [])]
+        return [
+            {"name": m["name"], "size": m.get("size", 0), "family": m.get("details", {}).get("family", "")}
+            for m in resp.json().get("models", [])
+        ]
 
-    def status(self) -> dict:
+    def status(self, model: str) -> dict:
         if not self.installed:
             return {"state": "missing", "detail": f"引擎未安装（找不到 {config.ENGINE_EXE}），先运行 echo-setup"}
         if not self.running():
             return {"state": "stopped", "detail": "引擎没有在运行"}
-        if config.MODEL not in self.models():
-            return {"state": "no-model", "detail": f"缺少模型 {config.MODEL}，先运行 echo-setup"}
-        return {"state": "ready", "detail": "本地引擎就绪", "model": config.MODEL}
+        if model not in {m["name"] for m in self.models()}:
+            return {"state": "no-model", "detail": f"缺少模型 {model}，先运行 echo-setup"}
+        return {"state": "ready", "detail": "本地引擎就绪", "model": model}
 
-    async def chat(self, messages: list[dict]) -> AsyncIterator[str]:
+    async def load(self, model: str) -> None:
+        """空 prompt 只加载不生成：换模型后先把它请进显存。"""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=5)) as client:
+            resp = await client.post(
+                f"{config.ENGINE_URL}/api/generate", json={"model": model, "keep_alive": config.KEEP_ALIVE}
+            )
+            resp.raise_for_status()
+
+    async def unload(self, model: str) -> None:
+        """换走的模型立刻让出显存：12GB 显存放不下两份大模型。"""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5)) as client:
+            await client.post(f"{config.ENGINE_URL}/api/generate", json={"model": model, "keep_alive": 0})
+
+    async def chat(self, model: str, system: str, messages: list[dict]) -> AsyncIterator[str]:
         """流式生成 AI 回复，逐段产出文本。"""
         body = {
-            "model": config.MODEL,
-            "messages": [{"role": "system", "content": config.SYSTEM_PROMPT}, *messages],
+            "model": model,
+            "messages": [{"role": "system", "content": system}, *messages],
             "stream": True,
             "think": False,
             "keep_alive": config.KEEP_ALIVE,
@@ -103,3 +120,18 @@ class Engine:
                     text = chunk.get("message", {}).get("content", "")
                     if text:
                         yield text
+
+    async def ask(self, model: str, prompt: str, max_tokens: int = 40) -> str:
+        """一问一答、不流式：给对话起标题这类小活。"""
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "think": False,
+            "keep_alive": config.KEEP_ALIVE,
+            "options": {"temperature": 0.3, "num_predict": max_tokens},
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=5)) as client:
+            resp = await client.post(f"{config.ENGINE_URL}/api/chat", json=body)
+            resp.raise_for_status()
+            return resp.json().get("message", {}).get("content", "")
