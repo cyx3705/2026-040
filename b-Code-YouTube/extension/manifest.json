@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Echo YouTube 字幕伴读",
+  "version": "0.3.1",
+  "description": "上下两条字幕交替显示当前与历史，预留逐词中文位置，提前选义，与 Echo 共用学会记录。",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1:8040/*"],
+  "background": {"service_worker": "background.js"},
+  "content_scripts": [{
+    "matches": ["https://www.youtube.com/*"],
+    "js": ["caption-bridge.js"],
+    "world": "MAIN",
+    "run_at": "document_start"
+  }, {
+    "matches": ["https://www.youtube.com/*"],
+    "js": ["timeline-core.js", "content.js"],
+    "run_at": "document_idle"
+  }],
+  "action": {"default_popup": "popup.html", "default_title": "Echo YouTube 字幕伴读"}
+}

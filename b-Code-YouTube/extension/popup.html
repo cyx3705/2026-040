@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>Echo YouTube 字幕伴读</title>
+<link rel="stylesheet" href="popup.css">
+<body>
+  <h1>Echo YouTube 字幕伴读</h1>
+  <p>上下两条字幕轮流更新：一条当前，一条历史。空档保留到下一条，最后一条保留到视频结束；每条预留逐词中文位置。</p>
+  <label><input id="enabled" type="checkbox" disabled>启用字幕伴读</label>
+  <label>提前处理 <select id="lead" disabled><option value="6">6 帧</option><option value="12">12 帧</option><option value="24">24 帧</option><option value="48">48 帧</option></select></label>
+  <p id="service" role="status">正在连接本机 Echo…</p>
+  <p id="mode" role="status"></p>
+  <h2>当前字幕</h2>
+  <p id="caption" role="status">正在读取…</p>
+  <button id="refresh">重试并刷新字幕</button>
+  <p>点击英文词标熟，再点恢复。学会的词不显示中文。无法读取时间轴时使用实时字幕，可尝试开启视频英文字幕。</p>
+  <a href="http://127.0.0.1:8040" target="_blank" rel="noreferrer">打开 Echo</a>
+  <script src="popup.js"></script>
+</body>
+</html>

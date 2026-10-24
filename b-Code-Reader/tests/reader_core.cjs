@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const core = require('../browser-extension/reader-core.js');
+const core = require('../extension/reader-core.js');
 const text = '😀 The bank is beside the river. '.repeat(100);
 const chunks = core.chunks(text);
 assert.equal(chunks.map(c => c.text).join(''), text);

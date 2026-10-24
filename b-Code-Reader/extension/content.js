@@ -1,9 +1,10 @@
 /* WEB-003: isolated-world, visible blocks only; no page HTML sent or executed. */
 (() => {
   if (globalThis.__echoReader) return;
+  if (!/^https?:$/.test(location.protocol) || ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) return;
   const CORE = globalThis.EchoReaderCore;
   const BLOCK = 'p,li,dt,dd,figcaption,td,th,h1,h2,h3,h4,h5,h6,blockquote,div,section,article,main,body';
-  const SKIP = 'script,style,noscript,textarea,input,select,option,button,pre,code,svg,math,canvas,iframe,ruby,[contenteditable]:not([contenteditable="false"]),[role="textbox"],[data-echo-word],[data-echo-ui]';
+  const SKIP = 'script,style,noscript,textarea,input,select,option,button,pre,code,svg,math,canvas,iframe,ruby,.html5-video-player,[data-echo-youtube],[contenteditable]:not([contenteditable="false"]),[role="textbox"],[data-echo-word],[data-echo-ui]';
   let enabled = false, port, watcher, visible, current, serial = 0, epoch = 0, lastError = '';
   let queue = [], seen = new WeakSet(), scheduled = new WeakSet(), learned = new Set();
   const records = new Set();
@@ -11,13 +12,16 @@
   const style = document.createElement('style');
   style.dataset.echoUi = '';
   style.textContent = `
-    [data-echo-word]{display:inline-flex!important;flex-direction:column!important;align-items:center!important;vertical-align:baseline!important;white-space:nowrap!important;line-height:1.25!important;font:inherit;cursor:pointer}
+    [data-echo-word]{display:inline-flex!important;flex-direction:column!important;align-items:center!important;vertical-align:baseline!important;white-space:nowrap!important;line-height:1.25!important;font:inherit;color:inherit!important;--echo-reader-foreground:currentColor!important;cursor:pointer}
     [data-echo-word]>.echo-reader-en{font:inherit!important;color:inherit!important}
-    [data-echo-word]>.echo-reader-zh{display:block!important;font:normal max(10px,.65em)/1.35 system-ui,sans-serif!important;color:#426b61!important;max-width:9em!important;overflow:hidden!important;text-overflow:ellipsis!important}
+    /* WEB-006: currentColor here is the inherited page foreground, including
+       links and live theme changes. The inherited variable avoids Chromium's
+       stale color-mix(currentColor) style cache after a parent theme change. */
+    [data-echo-word]>.echo-reader-zh{display:block!important;font:normal max(10px,.65em)/1.35 system-ui,sans-serif!important;color:inherit!important;color:color-mix(in srgb,var(--echo-reader-foreground) 92%,#588c80)!important;max-width:9em!important;overflow:hidden!important;text-overflow:ellipsis!important}
     [data-echo-word][data-known]>.echo-reader-zh{display:none!important}
-    [data-echo-word][data-degraded]>.echo-reader-zh{text-decoration:underline wavy #a46c32!important;text-underline-offset:2px!important}
-    [data-echo-word]:hover{background:rgba(70,150,120,.14)!important;border-radius:2px!important}
-    @media(prefers-color-scheme:dark){[data-echo-word]>.echo-reader-zh{color:#a1cbbf!important}}
+    [data-echo-word][data-degraded]>.echo-reader-zh{text-decoration:underline wavy currentColor!important;text-underline-offset:2px!important}
+    [data-echo-word]:hover{background:color-mix(in srgb,currentColor 8%,transparent)!important;border-radius:2px!important}
+    @media(forced-colors:active){[data-echo-word]>.echo-reader-zh{color:inherit!important}}
   `;
   function allowed(node) {
     return node.nodeType === Node.TEXT_NODE &&
@@ -255,7 +259,7 @@
       promise.then(() => reply({enabled})).catch(error => reply({error: error.message})); return true;
     }
   });
-  chrome.storage.local.get('sites').then(({sites = []}) => {
-    if (sites.includes(`${location.origin}/*`)) void start();
-  });
+  chrome.storage.local.get(['sites', 'autoEnable']).then(({sites = [], autoEnable = false}) => {
+    if (autoEnable || sites.includes(`${location.origin}/*`)) return start();
+  }).catch(error => { lastError = error.message; });
 })();

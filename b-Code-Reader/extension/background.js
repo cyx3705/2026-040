@@ -84,18 +84,25 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   return true;
 });
 
-// Optional persistent access is granted per site from the popup. Register only
-// sites the learner explicitly enabled; activeTab alone handles one-page mode.
+// WEB-005: all-web access is optional and requested by a popup user gesture.
+// Turning automatic reading off retains grants and per-site preferences.
 async function registerSites() {
-  const {sites = []} = await chrome.storage.local.get('sites');
-  const registered = await chrome.scripting.getRegisteredContentScripts();
+  const {sites = [], autoEnable = false} = await chrome.storage.local.get(['sites', 'autoEnable']);
+  const registered = (await chrome.scripting.getRegisteredContentScripts()).filter(s => s.id === 'echo-sites');
   if (registered.length) await chrome.scripting.unregisterContentScripts({ids: registered.map(s => s.id)});
   const allowed = [];
-  for (const origin of sites) {
-    if (await chrome.permissions.contains({origins: [origin]})) allowed.push(origin);
+  if (autoEnable && await chrome.permissions.contains({origins: ['http://*/*', 'https://*/*']})) {
+    allowed.push('http://*/*', 'https://*/*');
+  } else {
+    // A browser-side permission revocation must not leave a misleading switch.
+    if (autoEnable) await chrome.storage.local.set({autoEnable: false});
+    for (const origin of sites) {
+      if (await chrome.permissions.contains({origins: [origin]})) allowed.push(origin);
+    }
   }
   if (allowed.length) await chrome.scripting.registerContentScripts([{
     id: 'echo-sites', matches: allowed, js: ['reader-core.js', 'content.js'],
+    excludeMatches: ['http://127.0.0.1/*', 'https://127.0.0.1/*', 'http://localhost/*', 'https://localhost/*'],
     runAt: 'document_idle', persistAcrossSessions: true,
   }]);
 }
@@ -105,5 +112,8 @@ function queueRegistration() {
 }
 chrome.runtime.onInstalled.addListener(queueRegistration);
 chrome.runtime.onStartup.addListener(queueRegistration);
+chrome.permissions.onAdded.addListener(queueRegistration);
 chrome.permissions.onRemoved.addListener(queueRegistration);
-chrome.storage.onChanged.addListener(changes => { if (changes.sites) queueRegistration(); });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.sites || changes.autoEnable)) queueRegistration();
+});

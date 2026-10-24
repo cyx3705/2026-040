@@ -19,11 +19,15 @@
     "activeRoots": [
       "b-Office",
       "b-Code",
-      "b-Code-Echo"
+      "b-Code-Echo",
+      "b-Code-Reader",
+      "b-Code-YouTube"
     ],
     "sourceRoots": [
       "b-Code",
-      "b-Code-Echo"
+      "b-Code-Echo",
+      "b-Code-Reader",
+      "b-Code-YouTube"
     ],
     "generatedRoots": [
       "b-Office/technical-report/output",
@@ -54,9 +58,12 @@
     "testSuggestPerformance": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_suggest_performance.py --repeats 5",
     "testSuggestUI": "node b-Code-Echo/tests/suggest_queue.cjs",
     "testInputUI": "node b-Code-Echo/tests/composer_input.cjs",
-    "testReaderUI": "node b-Code-Echo/tests/reader_core.cjs",
-    "testReaderBrowser": "node b-Code-Echo/tests/reader_browser.cjs",
-    "testReaderLive": "node b-Code-Echo/tests/reader_browser.cjs --live",
+    "testReaderUI": "node b-Code-Reader/tests/reader_core.cjs",
+    "testReaderBrowser": "node b-Code-Reader/tests/reader_browser.cjs",
+    "testReaderLive": "node b-Code-Reader/tests/reader_browser.cjs --live",
+    "testYouTubeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs",
+    "testYouTubeUI": "node b-Code-YouTube/tests/timeline_core.cjs",
+    "testYouTubeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live",
     "testReaderNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_reader_acceptance.py",
     "testApiComparison": "uv run --project b-Code-Echo python b-Code-Echo/tests/api_comparison.py --mode native --out b-Office/technical-report/tmp/bench/native.json",
     "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1"
@@ -69,8 +76,13 @@
     },
     {
       "id": "browser-extension",
-      "path": "b-Code-Echo/browser-extension",
-      "purpose": "Edge/Chrome Manifest V3 网页英语伴读；共享 Echo 学会记录，调用本机原文预填 KV 与双分支单步选义"
+      "path": "b-Code-Reader/extension",
+      "purpose": "Edge/Chrome Manifest V3 网页英语伴读；可选全局/单网站自动开启、跟随原文字色，共享 Echo 学会记录，调用本机原文预填 KV 与双分支单步选义"
+    },
+    {
+      "id": "youtube-extension",
+      "path": "b-Code-YouTube/extension",
+      "purpose": "YT-001～006：YouTube 独立 MV3 上下字幕轮换当前/历史，空档保留至下条、末条保留至视频结束，逐词中文预留位置；英文轨道时间轴/原生请求副本/视频 textTracks 预取，提前帧数可选，有界队列复用 Echo 共享 KV 选义及统一学习库；无时间轴时实时处理"
     }
   ],
   "externalDependencies": [
@@ -110,12 +122,17 @@
     },
     {
       "name": "Edge / Chrome Manifest V3",
-      "purpose": "加载 browser-extension 源码目录；默认 activeTab 按页启用，可选网站授权后自动开启；扩展仅访问本机 8040 服务，不依赖云端翻译"
+      "purpose": "分别加载 b-Code-Reader/extension 或 b-Code-YouTube/extension；网页伴读支持按页及全局/单网站自动开启，YouTube 插件按时间轴提前选义，上下字幕轮换当前/历史并预留逐词中文；本机接口固定 8040，不依赖云端翻译"
     },
     {
       "name": "Playwright + 已安装 Microsoft Edge（仅扩展验收）",
-      "purpose": "testReaderBrowser / testReaderLive 使用独立临时 Edge 配置验证真实 MV3 服务工作线程、隔离内容脚本和 DOM；Node 环境需要可解析 playwright 包（可用 NODE_PATH），运行插件不需要此依赖；Live 另需 Echo 已启动并保持空闲",
+      "purpose": "testReaderBrowser / testReaderLive / testYouTubeBrowser / testYouTubeLive 使用临时 Edge 验证真实 MV3、MAIN 世界字幕桥、隔离内容脚本和 DOM；YouTube 使用模拟页面/媒体时钟，Browser 模拟 HTTP，Live 连接真实 Echo/C++ 并跳过学习库写入；Node 需能解析 playwright（可用 NODE_PATH）；Live 需服务空闲",
       "source": "https://playwright.dev/"
+    },
+    {
+      "name": "YouTube 桌面播放器与英文字幕轨道",
+      "purpose": "字幕桥在 www.youtube.com 页面内读取英文轨道并同源请求 api/timedtext，或观察播放器字幕请求的响应副本、读取 video.textTracks；播放令牌/地区/直播及网站变化可能使时间轴不可用，此时只处理已显示字幕；不向本机服务传递页面 URL、Cookie 或播放令牌",
+      "source": "https://www.youtube.com/"
     },
     {
       "name": "Windows 系统中文输入法",

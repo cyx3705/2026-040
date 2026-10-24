@@ -10,10 +10,11 @@ const path = require('node:path');
   const live = process.argv.includes('--live');
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'echo-reader-test-'));
   const extension = path.join(profile, 'extension');
-  await fs.cp(path.resolve(__dirname, '../browser-extension'), extension, {recursive: true});
+  await fs.cp(path.resolve(__dirname, '../extension'), extension, {recursive: true});
   const manifest = JSON.parse(await fs.readFile(path.join(extension, 'manifest.json'), 'utf8'));
-  // Simulate the activeTab/site grant in this disposable profile only.
-  manifest.host_permissions.push('http://echo-reader.test/*');
+  // Simulate website grants in this disposable profile only. Daily browser
+  // permissions are never read or changed by this test.
+  manifest.host_permissions.push('http://*/*', 'https://*/*');
   await fs.writeFile(path.join(extension, 'manifest.json'), JSON.stringify(manifest));
   let context;
   try {
@@ -58,16 +59,22 @@ const path = require('node:path');
       };
     });
     await context.route('http://echo-reader.test/**', route => route.fulfill({contentType: 'text/html', body: `
-      <!doctype html><html><head><meta charset="utf-8"></head><body>
+      <!doctype html><html><head><meta charset="utf-8"><style>
+      body{color:#181818;background:white}#second{color:#111;background:#fafafa}
+      #dark,#second.night{color:#eee;background:#151515}#link{color:#183bba}
+      </style></head><body>
       <p id="first">😀 He sat on the <b>ba</b>nk beside the river.</p>
       <p id="second">She went to the bank to get a loan.</p>
       <p><a href="/next" id="link">bank</a></p>
+      <p id="dark">The river bank is quiet.</p>
+      <div class="html5-video-player"><div class="ytp-caption-window-container">The bank is quiet.</div></div>
       <div contenteditable="true" id="edit">bank river</div><input value="bank"><code>bank</code>
       <p id="long">${'The river bank is quiet. '.repeat(55)}</p>
       </body></html>`}));
     const page = await context.newPage();
     await page.goto('http://echo-reader.test/sample');
     const original = await page.locator('body').textContent();
+    assert.equal(await page.locator('[data-echo-word]').count(), 0, 'automatic reading is opt-in');
     const tabId = await worker.evaluate(async () => (await chrome.tabs.query({})).find(t => t.url === 'http://echo-reader.test/sample').id);
     const send = message => worker.evaluate(async ({tabId, message}) => chrome.tabs.sendMessage(tabId, message), {tabId, message});
     await worker.evaluate(async tabId => {
@@ -83,7 +90,7 @@ const path = require('node:path');
     }
     assert.equal(await page.locator('#first [data-echo-word="bank"]').count(), 2, 'word spans inline tags');
     assert.equal(await page.locator('#first [data-echo-word="bank"] .echo-reader-zh').textContent(), '岸');
-    assert.equal(await page.locator('#edit [data-echo-word],code [data-echo-word],input [data-echo-word]').count(), 0);
+    assert.equal(await page.locator('#edit [data-echo-word],code [data-echo-word],input [data-echo-word],.html5-video-player [data-echo-word]').count(), 0);
     if (live) {
       const screenshot = process.argv.find(arg => arg.startsWith('--screenshot='))?.slice('--screenshot='.length);
       if (screenshot) await page.screenshot({path: screenshot, fullPage: false});
@@ -94,6 +101,35 @@ const path = require('node:path');
     }
     assert.equal(await page.locator('#first [data-echo-word="the"][data-known]').count(), 2);
     assert.equal(await page.locator('#first [data-echo-word="beside"][data-degraded]').count(), 1);
+    // Color follows the actual text in each block/link, regardless of OS theme.
+    await page.waitForSelector('#dark [data-echo-word="bank"] .echo-reader-zh');
+    const colors = async selector => page.locator(selector).first().evaluate(element => {
+      const en = getComputedStyle(element.querySelector('.echo-reader-en')).color;
+      const zh = getComputedStyle(element.querySelector('.echo-reader-zh')).color;
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      const rgb = color => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = color; ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+      return {en: rgb(en), zh: rgb(zh)};
+    });
+    const luminance = rgb => rgb.map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
+      .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+    const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
+    for (const [selector, background] of [['#second [data-echo-word="bank"]', [250, 250, 250]],
+      ['#dark [data-echo-word="bank"]', [21, 21, 21]], ['#link [data-echo-word="bank"]', [255, 255, 255]]]) {
+      const {en, zh} = await colors(selector);
+      assert.notDeepEqual(zh, en, 'Chinese has a slight color difference');
+      assert(zh.every((v, i) => Math.abs(v - en[i]) <= 21), 'Chinese stays close to page foreground');
+      assert(contrast(zh, background) >= 4.5, 'gloss retains readable contrast on light/dark/colored text fixtures');
+    }
+    const beforeTheme = await colors('#second [data-echo-word="bank"]');
+    await page.locator('#second').evaluate(element => element.classList.add('night'));
+    const afterTheme = await colors('#second [data-echo-word="bank"]');
+    assert.notDeepEqual(afterTheme.zh, beforeTheme.zh, 'existing annotations follow live page theme changes');
+    assert(contrast(afterTheme.zh, [21, 21, 21]) >= 4.5);
+    await page.emulateMedia({forcedColors: 'active'});
+    const forced = await colors('#second [data-echo-word="bank"]');
+    assert.deepEqual(forced.zh, forced.en, 'forced colors preserve the system foreground');
+    await page.emulateMedia({forcedColors: 'none'});
     const bank = page.locator('#second [data-echo-word="bank"]');
     await bank.click();
     await page.waitForFunction(() => document.querySelector('#second [data-echo-word="bank"]')?.hasAttribute('data-known'));
@@ -116,7 +152,56 @@ const path = require('node:path');
     await page.waitForFunction(() => document.querySelector('#dynamic [data-echo-word="bank"] .echo-reader-zh')?.textContent === '银行');
     assert(await worker.evaluate(() => readerRequests < 35), 'bounded requests, no self-mutation loop');
     await send({type: 'echo-toggle', enabled: false});
-    console.log('PASS real MV3 worker/content: streaming, learned reversal, inline UTF-16 ranges, dynamic DOM, editable exclusion and restoration');
+    // Exercise the actual settings UI, persisted worker registration and a fresh
+    // navigation. No manual injection or echo-toggle on the automatic page.
+    const popup = await context.newPage();
+    await popup.goto(new URL('popup.html', worker.url()).href);
+    await popup.waitForFunction(() => !document.getElementById('auto').disabled);
+    await popup.evaluate(() => {
+      globalThis.originalPermissionRequest = chrome.permissions.request;
+      chrome.permissions.request = async () => false;
+    });
+    await popup.locator('#auto').click(); // Denial immediately unchecks it.
+    await popup.waitForFunction(() => !document.getElementById('auto').checked && !document.getElementById('auto').disabled);
+    assert(!await worker.evaluate(async () => (await chrome.storage.local.get('autoEnable')).autoEnable), 'permission denial does not enable reading');
+    await popup.evaluate(() => { chrome.permissions.request = originalPermissionRequest; });
+    await popup.locator('#auto').check();
+    const waitMatches = async expected => {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const matches = await worker.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).find(s => s.id === 'echo-sites')?.matches || []);
+        if (JSON.stringify(matches.slice().sort()) === JSON.stringify(expected.slice().sort())) return;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      assert.fail(`content script registration did not become ${expected}`);
+    };
+    await waitMatches(['http://*/*', 'https://*/*']);
+    assert(await worker.evaluate(async () => (await chrome.storage.local.get('autoEnable')).autoEnable));
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#second [data-echo-word="bank"]:not([data-pending]) .echo-reader-zh')?.textContent === '银行');
+    assert((await send({type: 'echo-state'})).enabled, 'new page starts automatically');
+    await send({type: 'echo-toggle', enabled: false});
+    assert.equal(await page.locator('body').textContent(), original, 'manual close still restores an auto-enabled page');
+    await page.reload();
+    await page.waitForSelector('#second [data-echo-word="bank"]');
+    await popup.locator('#auto').uncheck();
+    await waitMatches([]);
+    await page.reload();
+    assert.equal(await page.locator('[data-echo-word]').count(), 0, 'global off does not auto-start future pages');
+    await assert.rejects(send({type: 'echo-state'}), 'global off does not inject a content script');
+    // Retain existing per-site behavior when global mode is off.
+    await worker.evaluate(() => chrome.storage.local.set({sites: ['http://echo-reader.test/*']}));
+    await waitMatches(['http://echo-reader.test/*']);
+    await page.reload();
+    await page.waitForSelector('#second [data-echo-word="bank"]');
+    // Browser-side permission removal: simulate the boundary because test grants
+    // in this temporary manifest are mandatory and cannot be revoked by Chrome.
+    await worker.evaluate(async () => {
+      chrome.permissions.contains = async () => false;
+      await chrome.storage.local.set({autoEnable: true});
+    });
+    await waitMatches([]);
+    assert.equal(await worker.evaluate(async () => (await chrome.storage.local.get('autoEnable')).autoEnable), false);
+    console.log('PASS real MV3 worker/content: streaming, learned reversal, ranges, dynamic DOM, restoration, global/site auto-start, permission denial/removal, adaptive colors and live themes');
   } finally {
     await context?.close();
     assert.equal(path.dirname(profile), path.resolve(os.tmpdir()));
