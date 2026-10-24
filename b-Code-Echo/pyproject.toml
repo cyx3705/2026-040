@@ -11,6 +11,9 @@ dependencies = [
 
 [project.scripts]
 echo-setup = "echo_app.setup:main"
+echo-upgrade = "echo_app.setup:upgrade_main"
+echo-kv-adapter = "echo_app.native_kv:main"
+echo-build-kernel = "echo_app.kernel_build:main"
 echo-serve = "echo_app.server:main"
 
 [build-system]

@@ -7,6 +7,10 @@ let convId = null;  // 当前对话在历史里的编号；新对话第一轮说
 let busy = false;
 let ready = false;
 let switching = false;  // 正在换模型
+let inputMode = null;
+let inputTranslation = null;
+let debugSettings = { candidates: 5, parallel: 1, max_candidates: 20 };
+const composerView = new EchoComposerView(input, $("suggest-list"), () => debugSettings.candidates, () => inputMode);
 let level = "cefr:A2";
 try { level = localStorage.getItem("echo-level") || level; } catch (e) {}
 let replyLength = 0;  // 回答长度：0 自动（跟着难度），1～5 从一句到长篇
@@ -52,17 +56,19 @@ async function checkEngine() {
     if (s.model) $("model-note").textContent = `${s.model} · 本地运行`;
     if (s.levels) renderLevels(s.levels);
     if (s.lengths) renderLengths(s.lengths);
+    if (s.debug) showDebug(s.debug);
   } catch (e) {
     ready = false;
     el.dataset.state = "error";
     $("engine-text").textContent = "连不上 Echo 后端";
   }
   updateSend();
+  setControls();
   if (ready) scheduleSuggest();
   else setTimeout(checkEngine, 3000);
 }
 
-function updateSend() { send.disabled = busy || switching || !ready || !input.value.trim(); }
+function updateSend() { send.disabled = busy || switching || !ready || inputTranslation?.pending || !input.value.trim(); }
 
 function addMessage(kind, text) {
   $("empty")?.remove();
@@ -93,6 +99,7 @@ function nearBottom() {
 }
 
 async function submit() {
+  if (inputMode?.chinese || inputMode?.composing || inputTranslation?.pending) return;
   const text = input.value.trim();
   if (!text || busy || switching || !ready) return;
   input.value = ""; autosize();
@@ -111,6 +118,8 @@ async function aiTurn() {
   box.classList.add("pending");
   const body = box.querySelector(".msg-body");
   let reply = "";
+  const glosses = new Map();
+  let generation = null;
   try {
     const resp = await fetch("/api/chat", {
       method: "POST",
@@ -130,17 +139,27 @@ async function aiTurn() {
         const line = buf.slice(0, cut); buf = buf.slice(cut + 2);
         if (!line.startsWith("data: ")) continue;
         const ev = JSON.parse(line.slice(6));
+        if (ev.generation && generation && ev.generation !== generation) continue;
+        if (ev.generation) generation = ev.generation;
         if (ev.error) throw new Error(ev.error);
-        if (ev.done) saved = ev;
+        if (ev.done) {
+          saved = ev;
+        }
+        if (ev.gloss) {
+          for (const item of ev.gloss) glosses.set(item.start, item);
+          renderStream(body, reply, glosses, false);
+        }
         if (ev.delta) {
           reply += ev.delta;
           const stick = nearBottom();
-          body.textContent = reply.replace(/^\s+/, "");
+          renderStream(body, reply, glosses, false);
           if (stick) scrollToBottom(false);
         }
+        if (ev.text_done) renderStream(body, reply, glosses, true);
       }
     }
-    history.push({ role: "assistant", content: reply.trim() });
+    history.push({ role: "assistant", content: reply, glosses: saved?.glosses || [...glosses.values()] });
+    renderStream(body, reply, glosses, true);
     if (saved) {
       const fresh = convId == null;
       convId = saved.conversation_id;
@@ -148,9 +167,8 @@ async function aiTurn() {
       loadConversations();  // 新对话先以第一句话为名进列表，顶到最上面
       if (fresh && !plan) nameConversation(convId);  // 练词对话的标题是固定的「练词 · 分组」
     }
-    await renderGlossed(body, reply.trim());
   } catch (e) {
-    box.remove();
+    if (!reply) box.remove();
     if (history.at(-1)?.role === "user") history.pop();  // 这一轮没成，撤回用户那句
     addMessage("error", `没有得到回复：${e.message}`);
   } finally {
@@ -165,18 +183,32 @@ async function aiTurn() {
 
 form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
 input.addEventListener("keydown", (e) => {
-  if (e.isComposing) return;
+  // Ctrl-up and the final native snapshot can arrive on different ticks.
+  // Keep a quick boundary Space until confirmed Chinese is back in the DOM.
+  if (e.key === " " && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey &&
+      !e.isComposing && inputMode?.proxyPending) {
+    e.preventDefault();
+    inputTranslation?.deferWordBoundary(() => inputMode.insert(" "));
+    return;
+  }
+  if (e.isComposing || e.keyCode === 229 || inputMode?.chinese || inputMode?.composing) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
   const k = e.key.toLowerCase();
+  if (e.key === " " && !e.shiftKey && inputTranslation?.confirmWord(() => inputMode.insert(" "))) {
+    e.preventDefault();
+    return;
+  }
   // Shift+W / Shift+S 在候选里左右移动；候选没出来时照常打出大写 W/S
-  if (e.shiftKey && (k === "w" || k === "s") && suggestions.length) {
+  if (e.shiftKey && (k === "w" || k === "s") && candidateIsCurrent()) {
     e.preventDefault();
     const n = suggestions.length;
     sel = k === "s" ? (sel + 1) % n : (sel - 1 + n) % n;
     renderSuggest();
     return;
   }
-  // Tab 确认选中的词（默认第一个）；Enter 只管发送，两者不再抢一个键
-  if (e.key === "Tab" && !e.shiftKey && suggestions.length) {
+  // INPUT-009: ordinary Space edits text; Shift+Space or Tab confirms once.
+  if (((e.key === " " && e.shiftKey) || (e.key === "Tab" && !e.shiftKey)) && e.repeat) { e.preventDefault(); return; }
+  if (((e.key === " " && e.shiftKey) || (e.key === "Tab" && !e.shiftKey)) && candidateIsCurrent()) {
     e.preventDefault();
     accept(suggestions[sel]);
     return;
@@ -188,62 +220,92 @@ input.addEventListener("keydown", (e) => {
 });
 
 function autosize() {
-  input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight + 2, 180) + "px";
-  input.style.overflowY = input.scrollHeight + 2 > 180 ? "auto" : "hidden";  // 没到上限不出滚动条
+  composerView.resize();
 }
-input.addEventListener("input", () => { autosize(); updateSend(); scheduleSuggest(); });
+input.addEventListener("input", () => {
+  autosize(); updateSend();
+  if (!inputMode?.composing && !inputMode?.chinese) scheduleSuggest();
+});
 input.addEventListener("focus", () => { if (!suggestions.length) scheduleSuggest(); });
 
 // ---- 输入预测：每打完一个词（或打到一半）跑一次前向，列出 5 个整词候选 ----
 
 let suggestions = [];
+let suggestionsFor = null;
 let sel = 0;
 let suggestTimer = 0;
 let suggestSeq = 0;
+let suggestInFlight = false;
+let suggestPending = false;
+let suggestScheduledAt = 0;
 const PARTIAL = /[A-Za-z']+$/;
 
 function scheduleSuggest() {
+  ++suggestSeq;  // 输入已变，立即让旧响应失效。
+  suggestScheduledAt = performance.now();
   clearTimeout(suggestTimer);
-  suggestTimer = setTimeout(fetchSuggest, 90);
+  if (inputMode?.chinese || inputMode?.composing || inputTranslation?.pending || inputTranslation?.awaitingBoundary) { suggestPending = false; hideSuggest(); return; }
+  if (suggestInFlight) {
+    suggestPending = true;
+    return;
+  }
+  suggestTimer = setTimeout(fetchSuggest, 25);
 }
 
 async function fetchSuggest() {
-  if (busy || switching || !ready) { hideSuggest(); return; }
+  clearTimeout(suggestTimer);
+  if (busy || switching || !ready || inputMode?.chinese || inputMode?.composing || inputTranslation?.pending || inputTranslation?.awaitingBoundary) {
+    suggestPending = false; suggestScheduledAt = 0; hideSuggest(); return;
+  }
+  if (suggestInFlight) {
+    suggestPending = true;  // 只记「还有新输入」，不为每个旧输入排一次请求。
+    ++suggestSeq;
+    return;
+  }
+  suggestInFlight = true;
+  suggestPending = false;
   const text = input.value;
   const seq = ++suggestSeq;
+  const requestedAt = performance.now();
+  const started = suggestScheduledAt || requestedAt;
+  suggestScheduledAt = 0;
   $("suggest").classList.add("loading");
   try {
     const resp = await fetch("/api/suggest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history, text, level, length: replyLength, practice: plan }),
+      body: JSON.stringify({ messages: history, text, level, length: replyLength, practice: plan, candidates: debugSettings.candidates }),
     });
     const items = await resp.json();
-    if (seq !== suggestSeq || input.value !== text || busy) return;  // 已经过时
+    if (seq !== suggestSeq || input.value !== text || busy || switching || inputMode?.chinese || inputMode?.composing || inputTranslation?.pending || inputTranslation?.awaitingBoundary) return;
     suggestions = Array.isArray(items) ? items : [];
+    suggestionsFor = text;
+    $("debug-status").textContent = `${suggestions.length} 项 · ${Math.round(performance.now() - started)}ms`;
+    $("debug-status").title = `请求 ${Math.round(performance.now() - requestedAt)}ms；显示耗时包含输入等待`;
     sel = 0;
     renderSuggest();
   } catch (e) {
     if (seq === suggestSeq) hideSuggest();
   } finally {
-    if (seq === suggestSeq) $("suggest").classList.remove("loading");
+    suggestInFlight = false;
+    $("suggest").classList.remove("loading");
+    if (suggestPending) fetchSuggest();  // 当前请求结束后，只预测最新输入。
   }
 }
 
 function hideSuggest() {
-  suggestions = []; sel = 0;
+  suggestions = []; suggestionsFor = null; sel = 0;
   renderSuggest();
 }
 
-// 候选行常驻：没有候选时显示一行说明，行高不变，输入框不跳
+// INPUT-003: wrap candidates within the count-dependent composer width.
 function renderSuggest() {
   const list = $("suggest-list");
   if (!suggestions.length) {
     const note = document.createElement("li");
     note.className = "suggest-empty";
     note.setAttribute("aria-hidden", "true");
-    note.textContent = switching ? "正在换模型…" : busy ? "AI 正在说…" : ready ? "预测下一个词…" : "引擎还没就绪";
+    note.textContent = inputMode?.chinese ? "中文输入中…" : switching ? "正在换模型…" : busy ? "AI 正在说…" : ready ? "预测下一个词…" : "引擎还没就绪";
     list.replaceChildren(note);
     return;
   }
@@ -251,6 +313,7 @@ function renderSuggest() {
     const li = document.createElement("li");
     li.setAttribute("role", "option");
     li.setAttribute("aria-selected", i === sel ? "true" : "false");
+    li.title = [s.word, s.gloss].filter(Boolean).join(" · ");
     li.innerHTML = '<span class="top"><span class="no"></span><span class="word"></span></span><span class="gloss"></span>';
     li.querySelector(".no").textContent = i + 1;
     li.querySelector(".word").textContent = s.word;
@@ -258,9 +321,18 @@ function renderSuggest() {
     li.addEventListener("mousedown", (e) => { e.preventDefault(); accept(s); });  // 不让输入框失焦
     return li;
   }));
+  list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function candidateIsCurrent() {
+  return suggestions.length && suggestionsFor === input.value && (!input.readOnly || inputMode?.fallback) &&
+    !inputTranslation?.pending &&
+    !inputMode?.chinese && !inputMode?.composing &&
+    input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
 }
 
 function accept(s) {
+  if (!candidateIsCurrent() || !suggestions.includes(s)) return;
   const text = input.value;
   const partial = /\s$/.test(text) ? "" : (text.match(PARTIAL) || [""])[0];
   let base = text.slice(0, text.length - partial.length);
@@ -272,29 +344,64 @@ function accept(s) {
   input.value = base + s.word + " ";        // 空格＝这个词说完了
   input.setSelectionRange(input.value.length, input.value.length);
   autosize(); updateSend();
+  hideSuggest();
+  suggestScheduledAt = performance.now();
   fetchSuggest();
 }
 
-// ---- 逐词释义：AI 回复说完后，每个词下面标中文 ----
+// ---- 逐词释义：SSE 更新已完成的词，尾部半词只显示原文 ----
 
-async function renderGlossed(body, text) {
-  const words = [...new Set((text.match(WORD) || []))];
-  let entries = {};
+function renderStream(body, text, entries, final) {
+  if (!body._words) {
+    body.replaceChildren();
+    body._words = new Map();
+    body._offset = 0;
+  }
+  body._tail?.remove();
+  for (const m of text.matchAll(WORD)) {
+    if (m.index < body._offset || (!final && m.index + m[0].length === text.length)) continue;
+    if (m.index > body._offset) body.append(sep(text.slice(body._offset, m.index)));
+    const start = [...text.slice(0, m.index)].length;
+    const item = entries.get(start);
+    const el = wordEl(m[0], item || { state: "pending", lemma: "", gloss: "" });
+    body.append(el);
+    body._words.set(start, { el, word: m[0], item });
+    body._offset = m.index + m[0].length;
+  }
+  for (const [start, record] of body._words) {
+    const item = entries.get(start);
+    if (!item || item === record.item) continue;
+    const el = wordEl(record.word, item);
+    record.el.replaceWith(el);
+    record.el = el;
+    record.item = item;
+  }
+  body._tail = document.createTextNode(text.slice(body._offset));
+  body.append(body._tail);
+}
+
+async function renderGlossed(body, text, context = history, savedGlosses = null) {
+  let entries = savedGlosses;
   try {
-    const resp = await fetch("/api/lookup", {
+    if (entries == null || entries.some(x => x.state === "skipped_learned" && !learned.has(x.lemma))) {
+    const resp = await fetch("/api/gloss", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ words }),
+      body: JSON.stringify({ text, default_only: true }),
     });
-    entries = await resp.json();
+    const defaults = await resp.json();
+    const existing = new Map((entries || []).filter(x => x.state !== "skipped_learned").map(x => [x.start, x]));
+    entries = defaults.map(x => existing.get(x.start) || x);
+    }
   } catch (e) {
     return;  // 查不到词典就保留纯文本
   }
+  const byStart = new Map(entries.map((entry) => [entry.start, entry]));
   const frag = document.createDocumentFragment();
   let last = 0;
   for (const m of text.matchAll(WORD)) {
     if (m.index > last) frag.append(sep(text.slice(last, m.index)));
-    frag.append(wordEl(m[0], entries[m[0]]));
+    frag.append(wordEl(m[0], byStart.get([...text.slice(0, m.index)].length)));
     last = m.index + m[0].length;
   }
   if (last < text.length) frag.append(sep(text.slice(last)));
@@ -310,27 +417,31 @@ function sep(s) {
   return el;
 }
 
-function wordEl(word, entry) {
-  if (!entry) {  // 词典里没有（人名、生造词）：只显示原文
+function wordEl(word, item) {
+  if (!item || item.state === "missing") {  // 词典里没有（人名、生造词）：只显示原文
     const el = document.createElement("span");
     el.className = "plain";
     el.textContent = word;
     return el;
   }
   const el = document.createElement("span");
-  el.className = "w" + (learned.has(entry.lemma) ? " learned" : "")
-    + (planLemmas.has(entry.lemma) || planLemmas.has(word.toLowerCase()) ? " target" : "");
-  el.dataset.lemma = entry.lemma;
-  el.dataset.gloss = entry.gloss;
+  el.className = "w" + (item.state === "skipped_learned" || learned.has(item.lemma) ? " learned" : "")
+    + (item.state === "degraded" ? " degraded" : "")
+    + (planLemmas.has(item.lemma) || planLemmas.has(word.toLowerCase()) ? " target" : "");
+  el.dataset.lemma = item.lemma;
+  el.dataset.gloss = item.gloss;
+  el.dataset.state = item.state;
   el.tabIndex = 0;
   el.setAttribute("role", "button");
-  el.title = [entry.phonetic && `/${entry.phonetic}/`, entry.translation].filter(Boolean).join("\n");
+  el.title = item.state === "degraded"
+    ? `${item.gloss || "无默认释义"}\n默认释义：${item.fallback_reason || "选义未完成"}`
+    : item.gloss || "";
   const en = document.createElement("span");
   en.className = "w-en";
   en.textContent = word;
   const zh = document.createElement("span");
   zh.className = "w-zh";
-  zh.textContent = entry.gloss;
+  zh.textContent = item.gloss;
   el.append(en, zh);
   return el;
 }
@@ -338,11 +449,11 @@ function wordEl(word, entry) {
 // 点一下：有中文的记为学会、中文收起；没中文的重新带上中文
 log.addEventListener("click", (e) => {
   const el = e.target.closest(".w");
-  if (el) toggleLearned(el.dataset.lemma);
+  if (el?.dataset.lemma) toggleLearned(el.dataset.lemma);
 });
 log.addEventListener("keydown", (e) => {
   const el = e.target.closest(".w");
-  if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleLearned(el.dataset.lemma); }
+  if (el?.dataset.lemma && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleLearned(el.dataset.lemma); }
 });
 
 function toggleLearned(lemma) {
@@ -361,7 +472,23 @@ async function setLearned(lemma, on) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lemma, learned: on }),
     });
+    if (!on) await refreshGlosses();
   } catch (e) {}
+}
+
+async function refreshGlosses() {
+  const boxes = [...log.querySelectorAll(".msg-ai")];
+  let ai = 0;
+  const jobs = [];
+  for (let i = 0; i < history.length; i++) {
+    const message = history[i];
+    if (message.role !== "assistant") continue;
+    const box = boxes[ai++];
+    if (box && !box.classList.contains("pending")) {
+      jobs.push(renderGlossed(box.querySelector(".msg-body"), message.content, history.slice(0, i), message.glosses));
+    }
+  }
+  await Promise.all(jobs);
 }
 
 function updateCount() {
@@ -554,7 +681,64 @@ function setControls() {
   levelBtn.disabled = busy || switching;
   if (levelBtn.disabled) closeLevelPanel();
   $("model-btn").disabled = busy || switching;
+  $("debug-candidates").disabled = busy || switching || !ready;
+  $("debug-parallel").disabled = busy || switching || !ready;
 }
+
+// ---- 发送框右侧：候选数量与引擎并发调试 ----
+function showDebug(settings) {
+  debugSettings = settings;
+  const count = Math.max(1, Math.min(20, Number(settings.candidates) || 5));
+  $("form").style.setProperty("--candidate-columns", Math.min(count, 5));
+  $("form").style.setProperty("--composer-width", `${760 + count * 24}px`);
+  input.rows = Math.ceil(count / 5);
+  autosize();
+  const choices = Array.from({ length: settings.max_candidates }, (_, i) => {
+    const option = document.createElement("option");
+    option.value = String(i + 1);
+    option.textContent = String(i + 1);
+    return option;
+  });
+  $("debug-candidates").replaceChildren(...choices);
+  $("debug-candidates").value = String(settings.candidates);
+  $("debug-parallel").value = String(settings.parallel);
+}
+
+async function changeDebug() {
+  if (busy || switching || !ready) { showDebug(debugSettings); return; }
+  const requested = {
+    candidates: Number($("debug-candidates").value),
+    parallel: Number($("debug-parallel").value),
+  };
+  switching = true;
+  ++suggestSeq;
+  clearTimeout(suggestTimer);
+  suggestPending = false;
+  hideSuggest();
+  setControls();
+  updateSend();
+  $("debug-status").textContent = requested.parallel === debugSettings.parallel ? "保存中…" : "重载模型…";
+  let error = "";
+  try {
+    const resp = await fetch("/api/debug", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requested),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || `保存失败（${resp.status}）`);
+    showDebug(data);
+  } catch (e) {
+    error = e.message;
+    showDebug(debugSettings);
+  } finally {
+    switching = false;
+    await checkEngine();
+  }
+  $("debug-status").textContent = error ? "设置失败" : "已生效";
+  if (error) addMessage("error", `没能应用调试设置：${error}`);
+}
+
+$("debug-candidates").addEventListener("change", changeDebug);
+$("debug-parallel").addEventListener("change", changeDebug);
 
 // ---- 模型：墨色条里点模型名换 ----
 
@@ -685,7 +869,9 @@ function markCurrent() {
 
 function setTitle(title) {
   $("chat-title").textContent = title || "对话";
-  document.title = title ? `${title} · Echo` : "Echo";
+  const pageTitle = title ? `${title} · Echo` : "Echo";
+  if (inputMode) inputMode.setTitle(pageTitle);
+  else document.title = pageTitle;
 }
 
 async function openConversation(id) {
@@ -706,9 +892,12 @@ async function openConversation(id) {
   log.replaceChildren();
   if (!history.length) log.append(makeEmpty());
   const glossing = [];
-  for (const m of history) {
+  for (let i = 0; i < history.length; i++) {
+    const m = history[i];
     const box = addMessage(m.role === "user" ? "me" : "ai", m.content);
-    if (m.role === "assistant") glossing.push(renderGlossed(box.querySelector(".msg-body"), m.content));
+    if (m.role === "assistant") {
+      glossing.push(renderGlossed(box.querySelector(".msg-body"), m.content, history.slice(0, i), m.glosses));
+    }
   }
   await Promise.all(glossing);
   scrollToBottom(false);
@@ -927,6 +1116,31 @@ function closeSide() {
   $("side-toggle").setAttribute("aria-expanded", "false");
 }
 
+inputTranslation = new EchoInputTranslation(input, async data => {
+  const response = await fetch("/api/input-translation", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...data, messages: history }),
+  });
+  if (!response.ok) throw new Error("translation_unavailable");
+  return response.json();
+}, () => JSON.stringify({ history, convId, level, plan, switching, busy }), reason => {
+  autosize(); updateSend();
+  if (reason) {
+    $("debug-status").textContent = "保留中文";
+    $("debug-status").title = `未替换中文：${reason}`;
+  }
+  scheduleSuggest();
+}, () => !inputMode?.chinese && !inputMode?.composing && !inputMode?.proxyPending);
+inputMode = new EchoInputMode(input, $("input-mode"), () => {
+  ++suggestSeq;
+  clearTimeout(suggestTimer);
+  suggestPending = false;
+  hideSuggest();
+  autosize(); updateSend();
+  inputTranslation?.flushWordBoundary();
+  inputTranslation?.pump();
+  if (!inputMode?.chinese && !inputMode?.composing) scheduleSuggest();
+}, composerView);
 renderSuggest();
 loadLearned();
 loadConversations();

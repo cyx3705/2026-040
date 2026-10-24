@@ -14,7 +14,8 @@
       document.documentElement.dataset.theme = t;
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css">
+  <!-- 固定版本兼容已运行的旧服务；新服务按资源内容替换版本。 -->
+  <link rel="stylesheet" href="/static/app.css?v=debug3">
 </head>
 <body>
   <header class="nav">
@@ -109,12 +110,28 @@
           <div class="compose-box">
             <div class="suggest" id="suggest">
               <ol class="suggest-list" id="suggest-list" role="listbox" aria-label="下一个词的候选"></ol>
-              <span class="suggest-hint"><kbd>Shift</kbd>+<kbd>W</kbd>/<kbd>S</kbd> 选 · <kbd>Tab</kbd> 确认</span>
             </div>
             <div class="compose-row">
-              <textarea id="input" rows="1" placeholder="Type in English…  空格结束一个词，Enter 发送" autocomplete="off" spellcheck="false"></textarea>
+              <textarea id="input" rows="1" aria-label="输入消息" lang="en" inputmode="text" autocomplete="off" spellcheck="false" readonly></textarea>
               <button class="btn send-btn" id="send" type="submit">发送</button>
             </div>
+          </div>
+          <div class="debug-options" role="group" aria-label="预测调试">
+            <span class="debug-label">调试</span>
+            <label for="debug-candidates">候选
+              <select id="debug-candidates" title="最多显示的候选数量；一次仍取 20 个 token" disabled>
+                <option value="1">1</option><option value="3">3</option>
+                <option value="5" selected>5</option><option value="8">8</option>
+                <option value="10">10</option><option value="15">15</option><option value="20">20</option>
+              </select>
+            </label>
+            <label for="debug-parallel">并发
+              <select id="debug-parallel" title="原生模式：1 正文结束后选义，2 正文与选义交错执行；兼容模式会重启引擎" disabled>
+                <option value="1" selected>1</option><option value="2">2</option>
+              </select>
+            </label>
+            <span class="debug-status" id="debug-status" role="status" aria-live="polite">一次取 20</span>
+            <span id="input-mode" hidden aria-hidden="true"></span>
           </div>
         </form>
       </footer>
@@ -164,6 +181,7 @@
     </div>
   </dialog>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/composer_input.js"></script>
+  <script src="/static/app.js?v=debug3"></script>
 </body>
 </html>

@@ -38,12 +38,31 @@
   },
   "commands": {
     "setup": "uv run --project b-Code-Echo echo-setup",
-    "build": null,
-    "test": null,
+    "upgrade": "uv run --project b-Code-Echo echo-upgrade",
+    "kvAdapter": "uv run --project b-Code-Echo echo-kv-adapter",
+    "build": "uv run --project b-Code-Echo echo-build-kernel",
+    "test": "uv run --project b-Code-Echo python -m unittest discover -s b-Code-Echo/tests",
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
     "run": "uv run --project b-Code-Echo echo-serve",
-    "package": null
+    "package": null,
+    "testNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_acceptance.py --cycles 1000",
+    "testPerformance": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_performance.py --repeats 3",
+    "testKernel": "uv run --project b-Code-Echo echo-build-kernel --test",
+    "testSuggestPerformance": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_suggest_performance.py --repeats 5",
+    "testSuggestUI": "node b-Code-Echo/tests/suggest_queue.cjs",
+    "testInputUI": "node b-Code-Echo/tests/composer_input.cjs",
+    "testReaderUI": "node b-Code-Echo/tests/reader_core.cjs",
+    "testReaderBrowser": "node b-Code-Echo/tests/reader_browser.cjs",
+    "testReaderLive": "node b-Code-Echo/tests/reader_browser.cjs --live",
+    "testReaderNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_reader_acceptance.py"
   },
+  "components": [
+    {
+      "id": "browser-extension",
+      "path": "b-Code-Echo/browser-extension",
+      "purpose": "Edge/Chrome Manifest V3 网页英语伴读；共享 Echo 学会记录，调用本机原文预填 KV 与双分支单步选义"
+    }
+  ],
   "externalDependencies": [
     {
       "name": "Ollama（自带）",
@@ -58,6 +77,34 @@
       "name": "ECDICT",
       "purpose": "英汉词典（SQLite），MIT 许可",
       "source": "https://github.com/skywind3000/ECDICT"
+    },
+    {
+      "name": "llama.cpp（Ollama bundled libllama）",
+      "purpose": "同一模型和统一 KV 池中的 A 正文、输入候选、Ctrl 中文转英文、网页原文预填与最多两个 B 的批处理单步选择；由 Echo 自建适配层调用 bundled DLL，不修改第三方二进制",
+      "source": "https://github.com/ggml-org/llama.cpp"
+    },
+    {
+      "name": "Visual Studio C++ Build Tools + Windows SDK",
+      "purpose": "构建 Echo 自有 Windows x64 C++ 推理内核及独立的 User32/IMM/GDI 原生中文输入桥；产物保存在数据目录 native/<源码摘要>，不修改 bundled libllama",
+      "source": "https://visualstudio.microsoft.com/visual-cpp-build-tools/"
+    },
+    {
+      "name": "Node.js（仅前端调度验证）",
+      "purpose": "testSuggestUI / testInputUI 以虚拟事件执行实际候选调度、输入控制、Shift+空格、中文空格词边界确认、转英文异步回填及光标导航代码；运行 Echo 不需要 Node.js",
+      "source": "https://nodejs.org/"
+    },
+    {
+      "name": "Edge / Chrome Manifest V3",
+      "purpose": "加载 browser-extension 源码目录；默认 activeTab 按页启用，可选网站授权后自动开启；扩展仅访问本机 8040 服务，不依赖云端翻译"
+    },
+    {
+      "name": "Playwright + 已安装 Microsoft Edge（仅扩展验收）",
+      "purpose": "testReaderBrowser / testReaderLive 使用独立临时 Edge 配置验证真实 MV3 服务工作线程、隔离内容脚本和 DOM；Node 环境需要可解析 playwright 包（可用 NODE_PATH），运行插件不需要此依赖；Live 另需 Echo 已启动并保持空闲",
+      "source": "https://playwright.dev/"
+    },
+    {
+      "name": "Windows 系统中文输入法",
+      "purpose": "Ctrl 中文在发送框位置内嵌原生子控件，使用已安装的中文布局与系统 IME；自有 EDIT/IMM 上下文承接组词，不显示独立 Echo 窗口，不修改其他应用的输入法。testKernel 的实际 IMM 验收需要此环境。"
     }
   ],
   "contextExclusions": [

@@ -5,6 +5,7 @@ import re
 import sqlite3
 import threading
 import time
+from functools import lru_cache
 from pathlib import Path
 
 from . import config
@@ -36,6 +37,48 @@ def _senses(translation: str) -> list[tuple[str, str]]:
         first = next((p.strip() for p in _SPLIT.split(rest) if p.strip()), "")
         if first:
             result.append((pos, first))
+    return result
+
+
+def sense_candidates(translation: str) -> list[dict[str, str]]:
+    """保留完整词条里的候选义项，供上下文选义使用。
+
+    与 short_gloss 使用的 _senses 不同，这里保留同一词性行里的全部逗号义项。
+    """
+    result = []
+    seen = set()
+    for line in translation.split("\n"):
+        line = line.strip()
+        if not line or "字母" in line:
+            continue
+        domain_match = _DOMAIN.match(line)
+        domain = domain_match.group(0).strip() if domain_match else ""
+        line = _DOMAIN.sub("", line)
+        m = _POS.match(line)
+        pos = m.group(1).split()[0] if m else ""
+        rest = line[m.end():] if m else line
+        parts, buffer, depth = [], [], 0
+        for char in rest:
+            if char in "（([【":
+                depth += 1
+            elif char in "）)]】":
+                depth = max(0, depth - 1)
+            if char in ",，;；" and depth == 0:
+                parts.append("".join(buffer))
+                buffer = []
+            else:
+                buffer.append(char)
+        parts.append("".join(buffer))
+        for text in (part.strip() for part in parts):
+            if not text:
+                continue
+            if domain:
+                text = domain + " " + text
+            key = (pos, text)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append({"pos": pos, "text": text})
     return result
 
 
@@ -170,6 +213,29 @@ class Dictionary:
                 return {"lemma": w, "phonetic": "", "gloss": g + tail_gloss, "translation": ""} if g else None
         return self._entry(w)
 
+    def lemma(self, word: str) -> str:
+        """Minimal morphology lookup; learned words need no Chinese extraction."""
+        w = word.lower().replace("’", "'")
+        if w.endswith("n't") or any(w.endswith(t) for t in CONTRACTION_TAILS):
+            return w
+        # These copula forms are references rather than exchange inflections.
+        if w in {"am", "is", "are", "was", "were", "been", "being"}:
+            return "be"
+        row = self._con().execute("SELECT exchange FROM words WHERE word = ?", (w,)).fetchone()
+        if row:
+            base, kinds = self._exchange((w, "", "", row[0]))
+            if base and kinds & set("pdi3s"):
+                exists = self._con().execute("SELECT 1 FROM words WHERE word = ?", (base,)).fetchone()
+                if exists:
+                    return base
+        return w
+
+    def is_word(self, word: str) -> bool:
+        """预测候选必须能查到释义；单字母只收 a / I，避免把字母碎片当词。"""
+        if not self.installed or (len(word) == 1 and word.lower() not in {"a", "i"}):
+            return False
+        return self.lookup(word) is not None
+
     def complete(self, prefix: str, n: int) -> list[str]:
         """以 prefix 开头的常用词，按词频（frq 是排名，越小越常用）。"""
         if not self.installed or not prefix.isalpha():
@@ -181,10 +247,64 @@ class Dictionary:
         ).fetchall()
         return [r[0] for r in rows]
 
+    @lru_cache(maxsize=256)
+    def english_choices(self, chinese: str) -> tuple[str, ...]:
+        """INPUT-007: bounded reverse lookup; SQLite does the scan in native C.
+
+        Prefer whole senses over substring matches (苹果 must not prefer 苹果汁).
+        Include our curated greetings, absent from some ECDICT translations.
+        No model call or dictionary write occurs here.
+        """
+        if not self.installed:
+            return ()
+        escaped = chinese.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        rows = self._con().execute(
+            "SELECT word, translation, frq FROM words WHERE translation LIKE ? ESCAPE '\\'"
+            " ORDER BY CASE WHEN frq > 0 THEN frq ELSE 999999 END, word LIMIT 256",
+            ("%" + escaped + "%",),
+        ).fetchall()
+        ranked = []
+        for word, translation, frequency in rows:
+            if "中文拼音" in translation or "汉语拼音" in translation:
+                continue
+            if not re.fullmatch(r"[A-Za-z]+(?:[' -][A-Za-z]+){0,3}", word) or len(word) > 48:
+                continue
+            exact = any(_PAREN.sub("", item["text"]).strip(" !！?？。") == chinese
+                        for item in sense_candidates(translation))
+            ranked.append((not exact, frequency if frequency > 0 else 999999, word))
+        ranked.extend((False, 0, word) for word, gloss in GLOSSES.items() if gloss == chinese)
+        result, seen = [], set()
+        for _, _, word in sorted(ranked):
+            if word.lower() not in seen:
+                seen.add(word.lower())
+                result.append(word)
+            if len(result) == 20:
+                break
+        return tuple(result)
+
     def lookup_many(self, words: list[str]) -> dict:
         if not self.installed:
             return {}
         return {w: self.lookup(w) for w in dict.fromkeys(words)}
+
+    def senses(self, word: str) -> list[dict[str, str]]:
+        """返回这个词形实际适用的完整义项，标签由调用方按出现位置分配。"""
+        entry = self.lookup(word)
+        if not entry:
+            return []
+        senses = sense_candidates(entry.get("translation", ""))
+        if not senses and entry.get("gloss"):
+            senses = [{"pos": "", "text": entry["gloss"]}]
+        return senses
+
+    def learned_lemmas(self) -> set[str]:
+        with self._user_lock:
+            return {row[0] for row in self._user.execute("SELECT lemma FROM learned")}
+
+    def is_learned(self, word: str, learned: set[str] | None = None) -> bool:
+        entry = self.lookup(word)
+        lemma = entry["lemma"] if entry else word.lower()
+        return lemma in (learned if learned is not None else self.learned_lemmas())
 
     def learned(self) -> list[dict]:
         with self._user_lock:

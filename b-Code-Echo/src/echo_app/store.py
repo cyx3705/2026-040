@@ -33,6 +33,9 @@ class Store:
         cols = {r[1] for r in self._con.execute("PRAGMA table_info(conversations)")}
         if "practice" not in cols:
             self._con.execute("ALTER TABLE conversations ADD COLUMN practice TEXT NOT NULL DEFAULT ''")
+        message_cols = {r[1] for r in self._con.execute("PRAGMA table_info(messages)")}
+        if "glosses" not in message_cols:
+            self._con.execute("ALTER TABLE messages ADD COLUMN glosses TEXT")
         self._con.execute("PRAGMA foreign_keys = ON")
         self._con.commit()
 
@@ -78,8 +81,10 @@ class Store:
                 )
             self._con.execute("DELETE FROM messages WHERE conv_id = ?", (conv_id,))
             self._con.executemany(
-                "INSERT INTO messages VALUES (?, ?, ?, ?)",
-                [(conv_id, i, m["role"], m["content"]) for i, m in enumerate(messages)],
+                "INSERT INTO messages (conv_id, seq, role, content, glosses) VALUES (?, ?, ?, ?, ?)",
+                [(conv_id, i, m["role"], m["content"],
+                  json.dumps(m["glosses"], ensure_ascii=False) if m.get("glosses") is not None else None)
+                 for i, m in enumerate(messages)],
             )
             self._con.commit()
         return conv_id
@@ -94,12 +99,13 @@ class Store:
         if not row:
             return None
         msgs = self._all(
-            "SELECT role, content FROM messages WHERE conv_id = ? ORDER BY seq", (conv_id,)
+            "SELECT role, content, glosses FROM messages WHERE conv_id = ? ORDER BY seq", (conv_id,)
         )
         return {
             "id": row[0], "title": row[1], "titled": bool(row[2]), "level": row[3], "updated": row[4],
             "practice": json.loads(row[5]) if row[5] else None,
-            "messages": [{"role": r, "content": c} for r, c in msgs],
+            "messages": [{"role": r, "content": c,
+                          **({"glosses": json.loads(g)} if g is not None else {})} for r, c, g in msgs],
         }
 
     def list(self, q: str = "", limit: int = 200) -> list[dict]:
