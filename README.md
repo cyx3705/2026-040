@@ -200,7 +200,7 @@ TOT-001 当前验收为文档核对及严格合同检查，仅确认上述边界
 
 ## 技术报告草稿（REPORT-001）
 
-英文短报告 [Echo: Interactive Word-Level Language Assistance with Shared-Prefix KV Branching](b-Office/technical-report/main.tex) 描述现有交互、生成/网页输入两种共享 KV 分叉及中文转英文的同一受限标签机制、历史工程测量、相关工作与限制。报告是成果稿件，不替代唯一长期文档「现行约定」。作者为 Yuxuan Chen（Ningbo University of Technology），尚未提交 arXiv；未新增实验或宣称学习效果、通用语义准确率、完整 ToT。
+英文短报告 [Echo: Composing Second-Language Replies by Steering a Conversation Model Word by Word](b-Office/technical-report/main.tex) 以人机交互（cs.HC 主类、cs.CL 交叉）为重点：学习者逐词选择对话模型对自己回合的续写预测（「学习者即解码器」），配合候选释义、中文就地转英文、标熟隐藏与退化标记；共享 KV 与受限标签选择作为实现支撑。核心评测（EVAL-001）以「预测用户下一次输入」为重心：对照人机交互延迟阈值（0.1 s 即时感、平均击键间隔 239 ms），同机同模型比较 Echo 一次前向+共享 KV、同一次前向经 API、以及经 API 的提示词工程（问模型用户最可能输入的 5 个词）；后者每键 364 ms、从不在击键间隔内返回。释义上屏、选义与中文转英文（API 更快，如实报告）作为次要对比保留。不再介绍难度分级。另含历史工程测量、相关工作、待验证假设与用户研究计划。报告是成果稿件，不替代唯一长期文档「现行约定」。作者为 Yuxuan Chen（Ningbo University of Technology），尚未提交 arXiv；未新增实验或宣称学习效果、通用语义准确率、完整 ToT。
 
 安装 TeX Live（pdfLaTeX，含 CJK 宏包；与 arXiv 编译方式一致）后，从仓库根目录运行 manifest 的 `reportBuild`（[构建脚本](b-Office/technical-report/build.ps1)）。PDF 与独立 TeX 源码 ZIP 生成于 `b-Office/technical-report/output/pdf/`，中间文件位于 `tmp/pdfs/`，两者均不入库；发布前需逐页渲染检查。历史测量不因文稿构建而重跑，最新 54/55 应用回归及原生输入崩溃限制已明确写入报告。
 

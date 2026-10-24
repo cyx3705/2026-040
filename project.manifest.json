@@ -58,6 +58,7 @@
     "testReaderBrowser": "node b-Code-Echo/tests/reader_browser.cjs",
     "testReaderLive": "node b-Code-Echo/tests/reader_browser.cjs --live",
     "testReaderNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_reader_acceptance.py",
+    "testApiComparison": "uv run --project b-Code-Echo python b-Code-Echo/tests/api_comparison.py --mode native --out b-Office/technical-report/tmp/bench/native.json",
     "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1"
   },
   "components": [
