@@ -43,6 +43,8 @@ artifacts/
 work/
 
 # Local and generated files
+b-Office/technical-report/output/
+b-Office/technical-report/tmp/
 *.bak
 *.cache
 *.log

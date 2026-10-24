@@ -198,6 +198,12 @@ uv run --project b-Code-Echo python b-Code-Echo/tests/native_performance.py --re
 
 TOT-001 当前验收为文档核对及严格合同检查，仅确认上述边界已记录。未来实现需对照单次生成与同预算候选重排，验证独立样例上的质量、耗时、峰值资源、评分失误，以及取消、超时和剪枝后的句柄回收；未完成这些验证前不宣称已有 ToT 或质量提升。
 
+## 技术报告草稿（REPORT-001）
+
+英文短报告 [Echo: Interactive Word-Level Language Assistance with Shared-Prefix KV Branching](b-Office/technical-report/main.tex) 描述现有交互、生成/网页输入两种共享 KV 分叉及中文转英文的同一受限标签机制、历史工程测量、相关工作与限制。报告是成果稿件，不替代唯一长期文档「现行约定」。作者为 Yuxuan Chen（Ningbo University of Technology），尚未提交 arXiv；未新增实验或宣称学习效果、通用语义准确率、完整 ToT。
+
+安装 TeX Live（pdfLaTeX，含 CJK 宏包；与 arXiv 编译方式一致）后，从仓库根目录运行 manifest 的 `reportBuild`（[构建脚本](b-Office/technical-report/build.ps1)）。PDF 与独立 TeX 源码 ZIP 生成于 `b-Office/technical-report/output/pdf/`，中间文件位于 `tmp/pdfs/`，两者均不入库；发布前需逐页渲染检查。历史测量不因文稿构建而重跑，最新 54/55 应用回归及原生输入崩溃限制已明确写入报告。
+
 ## 开发与发布
 
 尚未定。不走宿主模块的 dev 管线与发布表。

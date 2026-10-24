@@ -25,7 +25,10 @@
       "b-Code",
       "b-Code-Echo"
     ],
-    "generatedRoots": [],
+    "generatedRoots": [
+      "b-Office/technical-report/output",
+      "b-Office/technical-report/tmp"
+    ],
     "archiveRoots": [],
     "allowedRootDirectoryPrefixes": [
       "a-",
@@ -54,9 +57,15 @@
     "testReaderUI": "node b-Code-Echo/tests/reader_core.cjs",
     "testReaderBrowser": "node b-Code-Echo/tests/reader_browser.cjs",
     "testReaderLive": "node b-Code-Echo/tests/reader_browser.cjs --live",
-    "testReaderNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_reader_acceptance.py"
+    "testReaderNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_reader_acceptance.py",
+    "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1"
   },
   "components": [
+    {
+      "id": "technical-report",
+      "path": "b-Office/technical-report",
+      "purpose": "REPORT-001：基于现有实现与历史工程记录的英文短技术报告；main.tex 为权威源，build.ps1 生成 PDF 和独立源码包，不自动发布"
+    },
     {
       "id": "browser-extension",
       "path": "b-Code-Echo/browser-extension",
@@ -64,6 +73,11 @@
     }
   ],
   "externalDependencies": [
+    {
+      "name": "pdfLaTeX / TeX Live（仅报告构建）",
+      "purpose": "reportBuild 使用 pdfLaTeX（与 arXiv 编译一致；arXiv 不接受 XeLaTeX/LuaLaTeX 源码）及 CJKutf8（gbsn 字体）、Latin Modern、microtype、TikZ、booktabs、hyperref 和标准 LaTeX 数学/图形包；使用 TeX 自带字体，不依赖 Windows 私有字体；运行 Echo 无需 TeX",
+      "source": "https://tug.org/texlive/"
+    },
     {
       "name": "Ollama（自带）",
       "purpose": "私有推理实例：%USERPROFILE%\\.echo\\engine，端口 11540，模型目录 %USERPROFILE%\\.echo\\models；不用本机 Ollama 的服务",
@@ -108,6 +122,8 @@
     }
   ],
   "contextExclusions": [
+    "b-Office/technical-report/output/**",
+    "b-Office/technical-report/tmp/**",
     "b-Publish/**",
     "**/bin/**",
     "**/obj/**",
