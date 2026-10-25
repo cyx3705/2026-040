@@ -8,7 +8,10 @@
   let enabled = false, port, watcher, visible, current, serial = 0, epoch = 0, lastError = '';
   let queue = [], seen = new WeakSet(), scheduled = new WeakSet(), learned = new Set();
   const records = new Set();
-  let syncTimer, scanTimer;
+  let learnedRevision = 0;
+  const saving = new Set();
+  let syncTimer, scanTimer, retryTimer, paused = false;
+  const interrupted = new Set();
   const style = document.createElement('style');
   style.dataset.echoUi = '';
   style.textContent = `
@@ -80,8 +83,10 @@
     pump();
   }
   function paint(record, item = record.item) {
+    if (item.state === 'skipped_learned' && record.saved) item = record.saved;
+    if (item.gloss && ['normal', 'degraded'].includes(item.state)) record.saved = item;
     record.item = item;
-    const known = learned.has(item.lemma) || item.state === 'skipped_learned';
+    const known = learned.has(item.lemma);
     for (const element of record.elements) {
       element.toggleAttribute('data-known', known);
       element.toggleAttribute('data-pending', item.state === 'pending' && !known);
@@ -98,7 +103,7 @@
     const edits = new Map();
     for (const item of items) {
       if (item.state === 'missing') continue;
-      const record = {item, elements: [], zh: null};
+      const record = {item, elements: [], zh: null, job};
       job.records.set(item.start, record); records.add(record);
       const ranges = CORE.ranges(job.parts, job.chunk, item);
       for (let i = 0; i < ranges.length; i++) {
@@ -136,31 +141,33 @@
     }
   }
   function pump() {
-    if (!enabled || current || !port) return;
-    queue = queue.filter(job => job.parts.some(p => p.node.isConnected));
-    const index = queue.findIndex(job => job.parts.some(part => {
-      if (!part.node.isConnected) return false;
-      const range = document.createRange(); range.selectNodeContents(part.node);
+    if (!enabled || current || !port || paused) return;
+    queue = queue.filter(liveJob);
+    const index = queue.findIndex(job => [...job.parts.map(part => part.node),
+      ...[...job.records.values()].flatMap(record => record.elements)].some(node => {
+      if (!node.isConnected) return false;
+      const range = document.createRange(); range.selectNodeContents(node);
       const rect = range.getBoundingClientRect();
       return rect.width > 0 && rect.bottom >= -200 && rect.top <= innerHeight + 200;
     }));
     if (index < 0) return;
     current = queue.splice(index, 1)[0];
-    port.postMessage({type: 'gloss', id: current.id, text: current.chunk.text});
+    current.complete = false; current.failed = false;
+    // KV-001: one page is one context; the host keeps its KV across visits.
+    try { port.postMessage({type: 'gloss', id: current.id, text: current.chunk.text, session: `web:${location.origin}${location.pathname}`}); }
+    catch { connectionLost(port); }
   }
   function scroll() { clearTimeout(scanTimer); scanTimer = setTimeout(pump, 80); }
   async function syncLearned() {
-    const version = epoch;
+    const version = epoch, revision = learnedRevision;
     try {
       const result = await chrome.runtime.sendMessage({type: 'learned'});
       if (result.error) throw new Error(result.error);
       if (!enabled || version !== epoch) return;
+      if (revision !== learnedRevision) return true;
       const next = new Set(result.data.map(item => item.lemma));
-      const restored = [...learned].some(lemma => !next.has(lemma));
       learned = next;
-      // A previously skipped word has no Chinese on purpose. Refresh it only
-      // after unlearning, so zero-translation for learned words stays true.
-      if (restored) { stop(); await start(); return true; }
+      refreshSkipped();
       for (const record of records) {
         if (!record.elements.some(element => element.isConnected)) records.delete(record);
         else paint(record);
@@ -168,26 +175,51 @@
       return true;
     } catch (error) { lastError = error.message; return false; }
   }
+  // WEB-008: update membership in place. Only a never-translated occurrence
+  // needs its original chunk again; cached glosses and other chunks stay intact.
+  function refreshSkipped() {
+    const groups = new Map();
+    for (const record of records) {
+      if (learned.has(record.item.lemma) || record.item.state !== 'skipped_learned' ||
+          record.saved || record.refreshQueued || !record.elements.some(e => e.isConnected)) continue;
+      record.refreshQueued = true;
+      if (!groups.has(record.job)) groups.set(record.job, new Map());
+      groups.get(record.job).set(record.item.start, record);
+    }
+    for (const [source, items] of groups) queue.push({id: ++serial, chunk: source.chunk,
+      parts: [], records: items, epoch});
+    pump();
+  }
+  function learnedChange(lemma, value) {
+    learnedRevision++;
+    if (value) learned.add(lemma); else learned.delete(lemma);
+    for (const record of records) if (record.item.lemma === lemma) paint(record);
+    if (!value) refreshSkipped();
+  }
   async function click(event) {
     const wrapper = event.target.closest?.('[data-echo-word]');
     if (!enabled || !wrapper || (wrapper.closest('a') && !event.altKey) || !getSelection().isCollapsed) return;
     event.preventDefault(); event.stopPropagation();
-    const lemma = wrapper.dataset.echoWord, value = !learned.has(lemma);
+    const lemma = wrapper.dataset.echoWord, value = !learned.has(lemma), version = epoch;
+    if (saving.has(lemma)) return;
+    saving.add(lemma); learnedRevision++;
     // Wait for persistence before changing the visible state.
     try {
       const result = await chrome.runtime.sendMessage({type: 'set-learned', lemma, learned: value});
       if (result.error) throw new Error(result.error);
+      if (enabled && version === epoch) learnedChange(lemma, value);
     } catch (error) { lastError = error.message; wrapper.title = `保存失败：${lastError}`; }
+    finally { saving.delete(lemma); }
   }
   function stop() {
-    enabled = false; epoch++; clearInterval(syncTimer); clearTimeout(scanTimer);
+    enabled = false; epoch++; clearInterval(syncTimer); clearTimeout(scanTimer); clearTimeout(retryTimer); interrupted.clear();
     watcher?.disconnect(); visible?.disconnect(); port?.disconnect(); port = null;
     document.removeEventListener('click', click, true);
     document.removeEventListener('scroll', scroll, true);
     for (const record of records) for (const element of record.elements) {
       if (element.isConnected) element.replaceWith(document.createTextNode(element.querySelector('.echo-reader-en')?.textContent || ''));
     }
-    records.clear(); style.remove(); queue = []; current = null;
+    records.clear(); style.remove(); queue = []; current = null; paused = false;
     seen = new WeakSet(); scheduled = new WeakSet();
   }
   async function start() {
@@ -198,32 +230,7 @@
     }
     if (!enabled || epoch !== version) return;
     (document.head || document.documentElement).append(style);
-    port = chrome.runtime.connect({name: 'echo-reader'});
-    port.onMessage.addListener(message => {
-      if (!enabled || version !== epoch) return;
-      if (message.learned) {
-        const {lemma, value} = message.learned;
-        if (value) learned.add(lemma); else learned.delete(lemma);
-        if (!value) { stop(); void start(); return; }
-        for (const record of records) if (record.item.lemma === lemma) paint(record);
-        return;
-      }
-      if (!current || message.id !== current.id) return;
-      if (message.items) {
-        if (message.phase === 'dictionary') render(current, message.items);
-        else for (const item of message.items) {
-          const record = current.records.get(item.start); if (record) paint(record, item);
-        }
-      }
-      if (message.error) { lastError = message.error; failPending(current, 'connection_error'); queue = []; }
-      if (message.finished) { failPending(current, 'stream_interrupted'); current = null; pump(); }
-    });
-    port.onDisconnect.addListener(() => {
-      if (version !== epoch || !enabled) return;
-      lastError = '伴读连接中断，请在插件中关闭后重开';
-      if (current) failPending(current, 'connection_error');
-      port = null; current = null;
-    });
+    connect();
     visible = new IntersectionObserver(entries => {
       for (const entry of entries) if (entry.isIntersecting) { visible.unobserve(entry.target); collect(entry.target); }
     }, {rootMargin: '200px'});
@@ -251,7 +258,85 @@
     syncTimer = setInterval(() => { void syncLearned(); }, 15000);
     discover();
   }
+
+  // WEB-007: completed DOM annotations survive worker suspension. Only interrupted
+  // chunks are retried; new request IDs reject responses from the old stream.
+  function liveJob(job) {
+    return job.parts.some(p => p.node.isConnected) ||
+      [...job.records.values()].some(r => r.elements.some(e => e.isConnected));
+  }
+  function remember(job) {
+    paused = true; failPending(job, 'connection_error');
+    interrupted.add(job);
+    // Bound retained retry descriptors as well as the worker's queue.
+    if (interrupted.size > 16) interrupted.delete(interrupted.values().next().value);
+    scheduleRecovery();
+  }
+  function scheduleRecovery() {
+    if (!enabled || retryTimer || document.hidden) return;
+    retryTimer = setTimeout(() => { retryTimer = null; void recover(); }, 3000);
+  }
+  async function recover(wake = false) {
+    const version = epoch;
+    if (!enabled || document.hidden) return;
+    if (!port) connect();
+    if (!await syncLearned() || !enabled || epoch !== version) { scheduleRecovery(); return; }
+    paused = false; lastError = '';
+    for (const job of interrupted) {
+      if (!liveJob(job)) { interrupted.delete(job); continue; }
+      if (wake) job.retries = 0;
+      if ((job.retries || 0) >= 3) continue;
+      job.retries = (job.retries || 0) + 1;
+      job.id = ++serial; queue.push(job); interrupted.delete(job);
+    }
+    pump(); discover();
+  }
+  function connectionLost(active) {
+    if (!active || active !== port) return;
+    lastError = '伴读连接正在恢复';
+    if (current) remember(current);
+    port = null; current = null;
+    active.disconnect(); scheduleRecovery();
+  }
+  function connect() {
+    const version = epoch;
+    const active = chrome.runtime.connect({name: 'echo-reader'}); port = active;
+    port.onMessage.addListener(message => {
+      if (!enabled || version !== epoch || port !== active) return;
+      if (message.learned) {
+        const {lemma, value} = message.learned;
+        learnedChange(lemma, value);
+        return;
+      }
+      if (!current || message.id !== current.id) return;
+      if (message.items) {
+        if (message.phase === 'dictionary' && !current.records.size) render(current, message.items);
+        else for (const item of message.items) {
+          const record = current.records.get(item.start); if (record) paint(record, item);
+        }
+      }
+      if (message.done) current.complete = true;
+      if (message.error) { lastError = message.error; current.failed = true; }
+      if (message.finished) {
+        if (!current.complete || current.failed) remember(current);
+        else lastError = '';
+        current = null; refreshSkipped(); pump();
+      }
+    });
+    active.onDisconnect.addListener(() => {
+      if (version === epoch && enabled) connectionLost(active);
+    });
+
+  }
+  const wake = () => { if (enabled && !document.hidden) void recover(true); };
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('pageshow', wake);
+  window.addEventListener('online', wake);
+
   globalThis.__echoReader = {start, stop};
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.connection && enabled) { stop(); void start().catch(error => { lastError = error.message; }); }
+  });
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
     if (message.type === 'echo-state') reply({enabled, error: lastError});
     if (message.type === 'echo-toggle') {

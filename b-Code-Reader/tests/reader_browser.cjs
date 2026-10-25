@@ -25,7 +25,7 @@ const path = require('node:path');
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', {timeout: 15000});
     if (!live) await worker.evaluate(() => {
       globalThis.mockLearned = new Set(['the']);
-      globalThis.readerRequests = 0;
+      globalThis.readerRequests = 0; globalThis.readerTexts = []; globalThis.readerSessions = new Set(); globalThis.holdNextLearned = false;
       globalThis.fetch = async (url, options = {}) => {
         const route = new URL(url).pathname;
         if (route === '/api/status') return Response.json({model: 'fixture'});
@@ -35,11 +35,16 @@ const path = require('node:path');
             if (learned) mockLearned.add(lemma); else mockLearned.delete(lemma);
             return Response.json({ok: true});
           }
-          return Response.json([...mockLearned].map(lemma => ({lemma})));
+          const snapshot = [...mockLearned].map(lemma => ({lemma}));
+          if (holdNextLearned) {
+            holdNextLearned = false;
+            return new Promise(resolve => { globalThis.releaseLearned = () => resolve(Response.json(snapshot)); });
+          }
+          return Response.json(snapshot);
         }
         if (route !== '/api/reader/gloss') return new Response('', {status: 404});
         readerRequests++;
-        const {text} = JSON.parse(options.body);
+        const {text, session} = JSON.parse(options.body); readerTexts.push(text); readerSessions.add(session);
         const items = [...text.matchAll(/[A-Za-z]+/g)].map(match => ({
           start: match.index, end: match.index + match[0].length, word: match[0], lemma: match[0].toLowerCase(),
           gloss: mockLearned.has(match[0].toLowerCase()) ? '' : '默认',
@@ -131,12 +136,37 @@ const path = require('node:path');
     assert.deepEqual(forced.zh, forced.en, 'forced colors preserve the system foreground');
     await page.emulateMedia({forcedColors: 'none'});
     const bank = page.locator('#second [data-echo-word="bank"]');
+    const originalBank = await bank.elementHandle();
+    const originalOther = await page.locator('#dark [data-echo-word="bank"]').elementHandle();
+    await page.waitForTimeout(100);
+    const beforeLearnedRequests = await worker.evaluate(() => readerRequests);
+    // A GET that began before the click must not undo the newer learned broadcast.
+    await worker.evaluate(() => { holdNextLearned = true; });
+    await page.evaluate(() => window.dispatchEvent(new Event('pageshow')));
+    for (let i = 0; !await worker.evaluate(() => Boolean(globalThis.releaseLearned)) && i < 50; i++) await page.waitForTimeout(20);
     await bank.click();
     await page.waitForFunction(() => document.querySelector('#second [data-echo-word="bank"]')?.hasAttribute('data-known'));
     assert(await worker.evaluate(() => mockLearned.has('bank')));
+    await worker.evaluate(() => releaseLearned());
+    await page.waitForTimeout(100);
+    assert(await originalBank.evaluate(node => node.isConnected && node.hasAttribute('data-known')), 'stale learned GET cannot restart the page or undo marking');
+    assert(await originalOther.evaluate(node => node.isConnected), 'unrelated original annotations survive marking');
+    assert.equal(await worker.evaluate(() => readerRequests), beforeLearnedRequests, 'marking learned makes no gloss request');
     await bank.click();
     await page.waitForFunction(() => document.querySelector('#second [data-echo-word="bank"]:not([data-pending]) .echo-reader-zh')?.textContent === '银行');
     assert(!await worker.evaluate(() => mockLearned.has('bank')));
+    assert(await originalBank.evaluate(node => node.isConnected), 'restoring a cached gloss keeps its DOM');
+    assert.equal(await worker.evaluate(() => readerRequests), beforeLearnedRequests, 'restoring cached glosses makes no gloss request');
+    const untouchedBank = await bank.elementHandle();
+    const beforeSkippedRestore = await worker.evaluate(() => readerRequests);
+    const skipped = page.locator('#second [data-echo-word="the"]').first();
+    assert.equal(await skipped.count(), 1, 'fixture has an initially learned occurrence');
+    await skipped.click();
+    await page.waitForFunction(() => document.querySelector('#second [data-echo-word="the"] .echo-reader-zh')?.textContent === '词义');
+    assert(await untouchedBank.evaluate(node => node.isConnected), 'restoring an initially skipped word keeps all wrappers');
+    const restoredChunks = await worker.evaluate(start => readerTexts.slice(start), beforeSkippedRestore);
+    assert.deepEqual(await worker.evaluate(() => [...readerSessions]), ['web:http://echo-reader.test/sample'], 'KV-001: a page is one context');
+    assert(restoredChunks.length > 0 && restoredChunks.every(text => /\bthe\b/i.test(text)), 'only chunks containing the previously skipped lemma are fetched');
     // Read original text after turning off; tags, links and input content survive.
     await send({type: 'echo-toggle', enabled: false});
     assert.equal(await page.locator('[data-echo-word]').count(), 0);

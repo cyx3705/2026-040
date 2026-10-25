@@ -51,6 +51,7 @@
     "test": "uv run --project b-Code-Echo python -m unittest discover -s b-Code-Echo/tests",
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
     "run": "uv run --project b-Code-Echo echo-serve",
+    "runShared": "uv run --project b-Code-Echo echo-serve --share",
     "package": null,
     "testNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_acceptance.py --cycles 1000",
     "testPerformance": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_performance.py --repeats 3",
@@ -61,12 +62,18 @@
     "testReaderUI": "node b-Code-Reader/tests/reader_core.cjs",
     "testReaderBrowser": "node b-Code-Reader/tests/reader_browser.cjs",
     "testReaderLive": "node b-Code-Reader/tests/reader_browser.cjs --live",
+    "testConnectionBrowser": "node b-Code-Reader/tests/connection_browser.cjs",
+    "testNetwork": "uv run --project b-Code-Echo python -m unittest discover -s b-Code-Echo/tests -p test_web_access.py",
     "testYouTubeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs",
     "testYouTubeUI": "node b-Code-YouTube/tests/timeline_core.cjs",
     "testYouTubeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live",
     "testReaderNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_reader_acceptance.py",
+    "testReaderSessionNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_session_acceptance.py",
     "testApiComparison": "uv run --project b-Code-Echo python b-Code-Echo/tests/api_comparison.py --mode native --out b-Office/technical-report/tmp/bench/native.json",
-    "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1"
+    "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1",
+    "testRecoveryBrowser": "node b-Code-Reader/tests/recovery_browser.cjs",
+    "testYouTubeUpgradeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs --upgrade",
+    "testYouTubeUpgradeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live --upgrade"
   },
   "components": [
     {
@@ -77,12 +84,7 @@
     {
       "id": "browser-extension",
       "path": "b-Code-Reader/extension",
-      "purpose": "Edge/Chrome Manifest V3 网页英语伴读；可选全局/单网站自动开启、跟随原文字色，共享 Echo 学会记录，调用本机原文预填 KV 与双分支单步选义"
-    },
-    {
-      "id": "youtube-extension",
-      "path": "b-Code-YouTube/extension",
-      "purpose": "YT-001～006：YouTube 独立 MV3 上下字幕轮换当前/历史，空档保留至下条、末条保留至视频结束，逐词中文预留位置；英文轨道时间轴/原生请求副本/视频 textTracks 预取，提前帧数可选，有界队列复用 Echo 共享 KV 选义及统一学习库；无时间轴时实时处理"
+      "purpose": "ARCH-002 / WEB-001～008 / YT-001～008 / NET-001：统一 Edge/Chrome MV3 网页与 YouTube 字幕伴读；一个连接设置、学习广播和有界后台队列；闲置断线重连，保留完成释义，仅重试中断段落/字幕；YT-007 弹窗补注入升级前已打开页面的字幕脚本；YT-008 字幕统一使用网页后台协议，兼容旧后台并保留翻译连接错误；WEB-008 标熟/恢复已有释义只改显示，拒绝过期学习轮询，未翻译出现位置仅补原分块"
     }
   ],
   "externalDependencies": [
@@ -122,11 +124,11 @@
     },
     {
       "name": "Edge / Chrome Manifest V3",
-      "purpose": "分别加载 b-Code-Reader/extension 或 b-Code-YouTube/extension；网页伴读支持按页及全局/单网站自动开启，YouTube 插件按时间轴提前选义，上下字幕轮换当前/历史并预留逐词中文；本机接口固定 8040，不依赖云端翻译"
+      "purpose": "只加载 b-Code-Reader/extension（0.6.0）；统一网页自动伴读与 YouTube 交替字幕/预取，NET-001 共用主机地址/密钥，模型和学习库保持一份"
     },
     {
       "name": "Playwright + 已安装 Microsoft Edge（仅扩展验收）",
-      "purpose": "testReaderBrowser / testReaderLive / testYouTubeBrowser / testYouTubeLive 使用临时 Edge 验证真实 MV3、MAIN 世界字幕桥、隔离内容脚本和 DOM；YouTube 使用模拟页面/媒体时钟，Browser 模拟 HTTP，Live 连接真实 Echo/C++ 并跳过学习库写入；Node 需能解析 playwright（可用 NODE_PATH）；Live 需服务空闲",
+      "purpose": "testReaderBrowser / testYouTubeBrowser / testYouTubeUpgradeBrowser / testRecoveryBrowser / testConnectionBrowser 使用临时 Edge 验证同一真实 MV3；Recovery 模拟端口断开、流中断和离线恢复，Connection 使用隔离真实 HTTP 服务；Live（含 testYouTubeUpgradeLive 的旧后台协议边界）连接真实 Echo/C++ 且只读学习库，需空闲服务；Node 需能解析 playwright（可用 NODE_PATH）",
       "source": "https://playwright.dev/"
     },
     {

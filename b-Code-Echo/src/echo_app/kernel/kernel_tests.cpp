@@ -4,13 +4,14 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <fstream>
 #include <map>
 
 using namespace echo;
 namespace {
 struct Fake {
     int positions[3] = {-1, -1, -1};
-    int sampler_frees = 0, calls = 0, copies = 0;
+    int sampler_frees = 0, calls = 0, copies = 0, loads = 0;
     bool fail_release = false;
     std::vector<float> scores = std::vector<float>(256, -100.f);
     std::vector<std::tuple<int, int, int, bool>> batch;
@@ -87,6 +88,22 @@ Api fake_api() {
         return true;
     };
     p.memory_seq_pos_max = [](void*, int32_t seq)->int32_t {return f->positions[seq];};
+    // Session files hold the fake seq's (position, token) cells, like a real state file holds KV.
+    p.state_seq_save_file = [](void*, const char* path, int32_t seq, const int32_t* tokens, size_t n)->size_t {
+        std::ofstream out(path, std::ios::binary); out << n;
+        for (size_t i = 0; i < n; ++i) out << ' ' << tokens[i];
+        for (auto [pos, token] : f->kv[seq]) out << ' ' << pos << ' ' << token;
+        return out ? 1 : 0;
+    };
+    p.state_seq_load_file = [](void*, const char* path, int32_t seq, int32_t* tokens, size_t capacity, size_t* n)->size_t {
+        std::ifstream in(path, std::ios::binary); size_t count = 0;
+        if (!(in >> count) || count > capacity) return 0;
+        for (size_t i = 0; i < count; ++i) if (!(in >> tokens[i])) return 0;
+        f->kv[seq].clear(); int pos, token;
+        while (in >> pos >> token) f->kv[seq][pos] = token;
+        f->positions[seq] = f->kv[seq].empty() ? -1 : f->kv[seq].rbegin()->first;
+        *n = count; ++f->loads; return 1;
+    };
     p.sampler_chain_default_params = []{return SamplerParams{};};
     p.sampler_chain_init = [](SamplerParams)->void* {return new Sampler;};
     p.sampler_chain_add = [](void*, void* stage) {delete static_cast<Sampler*>(stage);};
@@ -310,6 +327,55 @@ int main() {
             require(f->calls == before + 1, "test:no_autoregressive_translation");
             require(!r.b && f->positions[1] == -1, "test:translation_branch_released");
             r.release_a(a);
+        });
+        test("reader session stays in seq0, saves on switch and resumes from its file", [] {
+            auto dir = std::filesystem::temp_directory_path() / ("echo-kernel-test-" + std::to_string(GetCurrentProcessId()));
+            std::filesystem::create_directories(dir);
+            auto p = (dir / "page.kv").u8string(), q = (dir / "video.kv").u8string();
+            {
+                Runtime r(fake_api(), "model", 4096, 0);
+                auto [a, prefix] = r.begin_session("abc", p);
+                require(prefix == 3 && r.session_evaluated == 3 && r.session_reused == 0, "test:first_prefill");
+                r.select_batch(a, {{4}}, {{"0", "A"}}); r.release_a(a);
+                require(f->positions[0] == 2 && r.resident, "test:release_keeps_session");
+                int calls = f->calls;
+                auto [a2, prefix2] = r.begin_session("abcd", p);
+                require(prefix2 == 4 && r.session_reused == 3 && r.session_evaluated == 1, "test:append_only_new_text");
+                require(f->calls == calls + 1 && std::get<1>(f->processed.back()[0]) == 'd', "test:one_new_token");
+                r.release_a(a2);
+                auto [a3, _] = r.begin_session("xy", q);
+                require(std::filesystem::exists(p) && !std::filesystem::exists(p + ".tmp") && r.session_saves == 1, "test:switch_saves");
+                require(f->kv[0].size() == 2 && f->kv[0].at(0) == 'x', "test:switch_clears_previous");
+                r.release_a(a3);
+                calls = f->calls;
+                auto [a4, prefix4] = r.begin_session("abcd", p);
+                require(f->loads == 1 && r.session_loaded == 4 && r.session_reused == 4 && r.session_evaluated == 0, "test:resume_from_file");
+                require(f->calls == calls && prefix4 == 4 && f->kv[0].at(3) == 'd', "test:resume_without_prefill");
+                r.release_a(a4);
+                auto [a5, __] = r.begin_session("abXY", p);
+                require(r.session_reused == 2 && r.session_evaluated == 2 && f->kv[0].at(2) == 'X', "test:divergent_tail_recomputed");
+                r.release_a(a5);
+                // Chat and input prediction need seq0: they save the session first.
+                auto [chat, ___] = r.begin("chat", 1, false);
+                require(!r.resident && r.session_saves == 3 && f->kv[0].at(0) == 'c', "test:chat_evicts_session");
+                r.release_a(chat);
+                auto [a6, ____] = r.begin_session("abXY", p);
+                require(r.session_loaded == 4 && r.session_evaluated == 0, "test:resume_after_chat");
+                r.release_a(a6);
+                r.flush();
+                require(r.session_saves == 3 && r.resident, "test:flush_skips_clean_session");
+                r.predict("pre", 1);
+                require(!r.resident && r.session_saves == 3, "test:unchanged_session_not_rewritten");
+                std::ofstream(q, std::ios::binary) << "corrupt";
+                auto [a7, _____] = r.begin_session("xy", q);
+                require(r.session_loaded == 0 && r.session_evaluated == 2, "test:corrupt_file_is_a_miss");
+                r.flush();
+                require(r.session_saves == 3, "test:flush_waits_for_release");
+                r.release_a(a7); r.flush();
+                require(r.session_saves == 4 && r.resident && f->kv[0].size() == 2, "test:idle_flush_keeps_session");
+            }
+            require(std::filesystem::exists(q), "test:shutdown_saves_session");
+            std::filesystem::remove_all(dir);
         });
         // Fixed-work CPU benchmark, comparable with heapq on the same float32 data.
         std::vector<float> scores(151936);

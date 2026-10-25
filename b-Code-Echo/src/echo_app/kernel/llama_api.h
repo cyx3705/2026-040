@@ -60,7 +60,7 @@ static_assert(sizeof(ModelParams) == 80 && sizeof(ContextParams) == 168,
     X(float*, get_logits_ith, (void*, int32_t)) \
     X(void, memory_seq_cp, (void*, int32_t, int32_t, int32_t, int32_t)) \
     X(bool, memory_seq_rm, (void*, int32_t, int32_t, int32_t)) \
-    X(int32_t, memory_seq_pos_max, (void*, int32_t)) \
+    X(int32_t, memory_seq_pos_max, (void*, int32_t))     X(size_t, state_seq_save_file, (void*, const char*, int32_t, const int32_t*, size_t))     X(size_t, state_seq_load_file, (void*, const char*, int32_t, int32_t*, size_t, size_t*)) \
     X(SamplerParams, sampler_chain_default_params, ()) \
     X(void*, sampler_chain_init, (SamplerParams)) \
     X(void, sampler_chain_add, (void*, void*)) \

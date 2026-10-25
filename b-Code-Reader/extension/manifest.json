@@ -1,11 +1,49 @@
 {
   "manifest_version": 3,
   "name": "Echo 英语伴读",
-  "version": "0.2.0",
-  "description": "使用本机 Echo 为网页英文逐词选义，点击标熟，学会的词不再翻译。",
-  "permissions": ["storage", "activeTab", "scripting"],
-  "host_permissions": ["http://127.0.0.1:8040/*"],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
-  "background": {"service_worker": "background.js"},
-  "action": {"default_popup": "popup.html", "default_title": "Echo 英语伴读"}
+  "version": "0.6.0",
+  "description": "网页与 YouTube 字幕统一伴读，自动恢复闲置连接，共用 Echo 主机与学习记录。",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8040/*",
+    "https://www.youtube.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Echo 伴读"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "caption-bridge.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "timeline-core.js",
+        "youtube-content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

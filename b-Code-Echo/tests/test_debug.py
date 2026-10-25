@@ -97,7 +97,7 @@ class NativeKernelTests(unittest.TestCase):
         executable = ensure_built().with_name("kernel_tests.exe")
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(result.stdout.count("PASS "), 14, result.stdout)
+        self.assertEqual(result.stdout.count("PASS "), 15, result.stdout)
         policy = subprocess.run([str(executable.with_name("input_tests.exe"))], capture_output=True, text=True, timeout=60)
         self.assertEqual(policy.returncode, 0, policy.stdout + policy.stderr)
 
@@ -187,10 +187,41 @@ class DebugApiTests(unittest.IsolatedAsyncioTestCase):
         self.server.engine.parallel = 1
         self.server.store.set_setting("suggest_candidates", "5")
         self.server.store.set_setting("engine_parallel", "1")
-        self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.server.app), base_url="http://echo")
+        self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.server.app), base_url="http://127.0.0.1")
 
     async def asyncTearDown(self):
         await self.client.aclose()
+
+    async def test_shared_extensions_use_the_same_real_temporary_learning_database(self):
+        key = "fixture-key-" + "x" * 32
+        headers = {"Authorization": f"Bearer {key}"}
+        with patch.object(self.server.app.state, "share_key", key, create=True), \
+                patch.object(self.server.dictionary, "lookup") as lookup:
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.server.app,
+                    client=("192.168.1.2", 1200)), base_url="http://192.168.1.10", headers=headers) as reader, \
+                    httpx.AsyncClient(transport=httpx.ASGITransport(app=self.server.app,
+                    client=("192.168.1.3", 1201)), base_url="http://192.168.1.10", headers=headers) as youtube:
+                result = await reader.post("/api/learned", json={"lemma": "bank", "learned": True})
+                self.assertEqual(result.status_code, 200)
+                self.assertIn({"lemma": "bank"}, (await youtube.get("/api/reader/learned")).json())
+                self.assertIn({"lemma": "bank"}, (await self.client.get("/api/reader/learned")).json())
+                await youtube.post("/api/learned", json={"lemma": "bank", "learned": False})
+                self.assertNotIn({"lemma": "bank"}, (await reader.get("/api/reader/learned")).json())
+                self.assertNotIn("bank", self.server.dictionary.learned_lemmas())
+                lookup.assert_not_called()
+
+    def test_share_command_binds_network_without_trusting_forwarded_headers(self):
+        with patch("sys.argv", ["echo-serve", "--share", "--no-browser"]), \
+                patch.object(config, "WEB_HOST", "127.0.0.1"), \
+                patch.object(config, "SHARE_KEY", "fixture-key-" + "x" * 32), \
+                patch.object(self.server.app.state, "share_key", None, create=True), \
+                patch.object(self.server, "already_running", return_value=False), \
+                patch.object(self.server.uvicorn, "run") as run, \
+                patch.object(self.server.webbrowser, "open") as browser:
+            self.server.main()
+            self.assertEqual(run.call_args.kwargs["host"], "0.0.0.0")
+            self.assertFalse(run.call_args.kwargs["proxy_headers"])
+            browser.assert_not_called()
 
     async def test_reader_all_learned_stream_skips_chinese_and_native_calls(self):
         dictionary = Mock()
@@ -251,13 +282,13 @@ class DebugApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_input_mode_rejects_foreign_and_missing_origin(self):
         with patch.object(self.server.input_bridge, "acquire") as acquire:
-            for headers in ({}, {"origin": "http://other-site"}):
+            for headers, expected in (({}, 403), ({"origin": "http://other-site"}, 401)):
                 response = await self.client.post("http://127.0.0.1:8040/api/input-mode", headers=headers,
                                                   json={"action": "acquire", "marker": "a" * 32})
-                self.assertEqual(response.status_code, 403)
+                self.assertEqual(response.status_code, expected)
             rebound = await self.client.post("http://echo/api/input-mode", headers={"origin": "http://echo"},
                                              json={"action": "acquire", "marker": "a" * 32})
-            self.assertEqual(rebound.status_code, 403)
+            self.assertEqual(rebound.status_code, 401)
             acquire.assert_not_called()
 
     async def test_input_mode_focus_challenge_and_owner_are_forwarded(self):

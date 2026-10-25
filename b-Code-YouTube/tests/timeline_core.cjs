@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const core = require('../extension/timeline-core.js');
+const core = require('../../b-Code-Reader/extension/timeline-core.js');
 const cues = core.parse(JSON.stringify({events: [
   {tStartMs: 1000, dDurationMs: 3000, segs: [{utf8: 'The river '}, {utf8: 'bank.'}]},
   {tStartMs: 4000, dDurationMs: 2000, segs: [{utf8: 'Get a loan.'}]},

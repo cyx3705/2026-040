@@ -142,10 +142,11 @@ class RemoteKVBackend:
             raise KVUnsupported("adapter_invalid_response")
         return data
 
-    async def create_sequence(self, model: str, text: str) -> SequenceHandle:
+    async def create_sequence(self, model: str, text: str, session: str | None = None) -> SequenceHandle:
         # The native worker can finish prefill after the caller disconnects.
         # Retain the response/handle even on cancellation, then reclaim it.
-        pending = asyncio.create_task(self._post("/v1/kv/sequences", {"model": model, "text": text}))
+        body = {"model": model, "text": text, **({"session": session} if session else {})}
+        pending = asyncio.create_task(self._post("/v1/kv/sequences", body))
         try:
             data = await asyncio.shield(pending)
         except asyncio.CancelledError:

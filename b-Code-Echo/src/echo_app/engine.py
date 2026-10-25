@@ -270,8 +270,8 @@ class Engine:
         """Create one temporary B from an already computed A prefix."""
         return await self.kv.fork_at(sequence, prefix_tokens)
 
-    async def kv_create_sequence(self, model: str, text: str) -> SequenceHandle:
-        return await self.kv.create_sequence(model, text)
+    async def kv_create_sequence(self, model: str, text: str, session: str | None = None) -> SequenceHandle:
+        return await self.kv.create_sequence(model, text, session)
 
     async def kv_tokenize(self, text: str, add_special: bool = True) -> list[int]:
         return await self.kv.tokenize(text, add_special)

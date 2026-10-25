@@ -19,6 +19,8 @@ def _library():
         "echo_open": ([C.c_wchar_p, C.c_char_p, integer, integer, C.POINTER(ptr)], integer),
         "echo_close": ([ptr], None),
         "echo_begin": ([ptr, C.c_char_p, C.c_uint32, boolean, C.POINTER(u64), C.POINTER(integer)], integer),
+        "echo_session_begin": ([ptr, C.c_char_p, C.c_char_p, C.POINTER(u64), C.POINTER(integer)], integer),
+        "echo_session_flush": ([ptr], integer),
         "echo_step": ([ptr, u64, C.POINTER(boolean), C.POINTER(ptr)], integer),
         "echo_tokenize": ([ptr, C.c_char_p, boolean, C.POINTER(ptr)], integer),
         "echo_prefix": ([ptr, u64, C.c_char_p, C.POINTER(integer), C.POINTER(ptr)], integer),
@@ -34,7 +36,7 @@ def _library():
     for name, (args, result) in signatures.items():
         fn = getattr(lib, name)
         fn.argtypes, fn.restype = args, result
-    if lib.echo_abi() != 1:
+    if lib.echo_abi() != 2:
         raise RuntimeError("Echo C++ kernel ABI mismatch")
     return lib
 
@@ -123,6 +125,15 @@ class NativeKVRuntime:
         self._invoke("echo_begin", _utf8(text), 0xFFFFFFFF if seed is None else seed & 0xFFFFFFFF,
                      sample, C.byref(id_), C.byref(prefix))
         return SequenceHandle(str(id_.value), self.epoch, prefix.value)
+
+    def create_session(self, text: str, path: str):
+        """Reader A whose prefix stays in seq0 and is saved to/loaded from path."""
+        id_, prefix = C.c_uint64(), C.c_int()
+        self._invoke("echo_session_begin", _utf8(text), _utf8(path), C.byref(id_), C.byref(prefix))
+        return SequenceHandle(str(id_.value), self.epoch, prefix.value)
+
+    def flush_session(self):
+        self._invoke("echo_session_flush")
 
     def generate(self, sequence: SequenceHandle, max_tokens=512, seed=None) -> Iterator[str]:
         id_ = self._id(sequence)

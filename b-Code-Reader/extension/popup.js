@@ -1,9 +1,23 @@
 let tab, running = false, origin;
+let connectionRequest = 0;
 const $ = id => document.getElementById(id);
 async function rpc(message) {
   const result = await chrome.runtime.sendMessage(message);
   if (result.error) throw new Error(result.error);
   return result.data;
+}
+async function connectionStatus() {
+  const version = ++connectionRequest;
+  try {
+    const state = await rpc({type: 'status'});
+    if (version !== connectionRequest) return;
+    $('status').textContent = state.model ? `已连接 · ${state.model}` : '已连接';
+    $('status').dataset.state = 'ok'; $('offline').textContent = '';
+  } catch (error) {
+    if (version !== connectionRequest) return;
+    $('status').textContent = '未连接'; $('status').dataset.state = 'error';
+    $('offline').textContent = `${error.message}。请启动 Echo，或在设置里检查主机地址。`;
+  }
 }
 async function inject() {
   await chrome.scripting.executeScript({target: {tabId: tab.id}, files: ['reader-core.js', 'content.js']});
@@ -24,6 +38,7 @@ async function update() {
     $('detail').textContent = value.error || '';
   } catch { running = false; }
   $('toggle').textContent = running ? '关闭并还原本页' : '开启本页伴读';
+  $('web-state').textContent = running ? '已开启' : '未开启';
 }
 $('toggle').onclick = async () => {
   $('toggle').disabled = true;
@@ -74,7 +89,11 @@ $('site').onchange = async () => {
   [tab] = await chrome.tabs.query({active: true, currentWindow: true});
   try {
     const url = new URL(tab.url);
-    if (!/^https?:$/.test(url.protocol) || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) throw new Error('请在普通 HTTP/HTTPS 网页使用');
+    // YouTube 页面只显示字幕段，其他页面只显示网页段。
+    const youtube = url.origin === 'https://www.youtube.com';
+    $('web').hidden = youtube; $('yt').hidden = !youtube;
+    const connection = await EchoConnection.settings();
+    if (!/^https?:$/.test(url.protocol) || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || url.origin === connection.url) throw new Error('请在普通 HTTP/HTTPS 网页使用');
     origin = `${url.origin}/*`;
     $('site').checked = sites.includes(origin);
     $('site').disabled = $('auto').checked;
@@ -83,8 +102,6 @@ $('site').onchange = async () => {
     $('detail').textContent = error.message; $('toggle').disabled = true; $('site').disabled = true;
   }
   $('auto').disabled = false;
-  try {
-    const state = await rpc({type: 'status'});
-    $('status').textContent = `本机 Echo 已连接 · ${state.model || ''}`;
-  } catch { $('status').textContent = '本机 Echo 未启动，请先运行 echo-serve'; }
+  await connectionStatus();
 })();
+window.addEventListener('echo-connection-saved', () => { void connectionStatus(); void update(); });

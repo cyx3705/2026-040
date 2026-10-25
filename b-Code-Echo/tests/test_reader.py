@@ -122,5 +122,67 @@ class ReaderTests(unittest.IsolatedAsyncioTestCase):
         engine.kv_create_sequence.assert_not_awaited()
 
 
+class ReaderSessionTests(unittest.IsolatedAsyncioTestCase):
+    """KV-001: per page/video passages grow append-only and persist beside the KV file."""
+    dictionary, engine, collect = ReaderTests.dictionary, ReaderTests.engine, ReaderTests.collect
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        self.folder = tempfile.TemporaryDirectory()
+        self.contexts = reader.Contexts(Path(self.folder.name))
+
+    def tearDown(self):
+        self.folder.cleanup()
+
+    async def test_passages_append_and_revisit_reuses_prompt(self):
+        dictionary, engine = self.dictionary(), self.engine()
+        digest = reader.session_digest("m", "yt:video")
+        await self.collect(dictionary, engine, "The river bank.", session=digest, contexts=self.contexts)
+        await self.collect(dictionary, engine, "A bank loan.", session=digest, contexts=self.contexts)
+        first, second = (call.args[1] for call in engine.kv_create_sequence.call_args_list)
+        self.assertEqual([call.args[2] for call in engine.kv_create_sequence.call_args_list], [digest, digest])
+        line = '"The river bank."\n'
+        self.assertEqual(second[:second.index(line) + len(line)], first[:first.index('"The river bank."') ] + line,
+                         "the second prompt only appends after the first passage")
+        self.assertEqual(self.contexts.load(digest), ["The river bank.", "A bank loan."])
+        await self.collect(dictionary, engine, "The river bank.", session=digest, contexts=self.contexts)
+        self.assertEqual(engine.kv_create_sequence.call_args.args[1], second, "a revisited passage keeps the prefix")
+        other = reader.session_digest("m", "web:https://example.com/")
+        self.assertNotEqual(other, digest)
+        self.assertEqual(self.contexts.load(other), [])
+
+    async def test_without_ambiguous_words_passage_still_joins_context(self):
+        dictionary, engine = self.dictionary(["bank"]), self.engine()
+        digest = reader.session_digest("m", "yt:video")
+        await self.collect(dictionary, engine, "bank", session=digest, contexts=self.contexts)
+        engine.kv_create_sequence.assert_not_awaited()
+        self.assertEqual(self.contexts.load(digest), ["bank"])
+
+    async def test_budget_drops_oldest_passages_but_keeps_current(self):
+        dictionary, engine = self.dictionary(), self.engine()
+        engine.kv_tokenize = AsyncMock(side_effect=lambda text, add_special=True: [0] * (len(text) // 4))
+        digest = reader.session_digest("m", "yt:video")
+        self.contexts.save(digest, [f"Old passage number {i} about a bank." for i in range(400)])
+        await self.collect(dictionary, engine, "Current bank.", session=digest, contexts=self.contexts)
+        passages = self.contexts.load(digest)
+        self.assertEqual(passages[-1], "Current bank.")
+        self.assertLessEqual(len(reader.session_prompt("chatml", passages)) // 4, reader.SESSION_KEEP)
+        self.assertEqual(passages[0], f"Old passage number {400 - len(passages) + 1} about a bank.",
+                         "only the oldest passages are dropped, order kept")
+
+    def test_session_files_prune_oldest_but_never_current(self):
+        import os
+        from pathlib import Path
+        from echo_app.native_kv import SessionFiles
+        folder = Path(self.folder.name)
+        for i in range(5):
+            path = folder / f"{i:064x}.kv"; path.write_bytes(b"x" * 100)
+            os.utime(path, (1000 + i, 1000 + i))
+        files = SessionFiles(folder, max_bytes=250, max_files=10)
+        files.prune(folder / f"{0:064x}.kv")
+        self.assertEqual(sorted(p.name[-5:] for p in folder.glob("*.kv")), ["00.kv", "03.kv", "04.kv"])
+
+
 if __name__ == "__main__":
     unittest.main()

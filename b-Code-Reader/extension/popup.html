@@ -1,9 +1,35 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8">
-<title>Echo 英语伴读</title><link rel="stylesheet" href="popup.css">
-<body><h1>Echo 英语伴读</h1><p id="status">正在连接本机 Echo…</p>
-<button id="toggle">开启本页伴读</button>
-<label><input type="checkbox" id="auto" disabled>所有网页默认开启</label>
-<label><input type="checkbox" id="site" disabled>仅此网站以后自动开启</label>
-<p>点击单词：收起中文并标记学会；再点恢复。链接内用 Alt＋点击切换，普通点击仍打开链接。</p>
-<p id="detail" role="status"></p><a href="http://127.0.0.1:8040" target="_blank" rel="noreferrer">打开 Echo</a>
-<script src="popup.js"></script></body></html>
+<title>Echo 伴读</title><link rel="stylesheet" href="popup.css">
+<body>
+<header><h1>Echo 伴读</h1><p id="status" role="status" data-state="wait">连接中…</p></header>
+<p id="offline" class="note" role="status"></p>
+
+<section id="web">
+  <h2><span>本页</span><i id="web-state">未开启</i></h2>
+  <button id="toggle" class="primary">开启本页伴读</button>
+  <label class="row"><input type="checkbox" id="site" disabled>此网站自动开启</label>
+  <label class="row"><input type="checkbox" id="auto" disabled>所有网页自动开启</label>
+  <p id="detail" class="note" role="status"></p>
+</section>
+
+<section id="yt" hidden>
+  <h2><span>YouTube 字幕</span><i id="yt-state"></i></h2>
+  <label class="row"><input id="enabled" type="checkbox" disabled>字幕伴读</label>
+  <p id="caption" lang="en" role="status">正在读取…</p>
+  <p id="mode" class="note" role="status"></p>
+  <button id="refresh">重新读取字幕</button>
+</section>
+
+<p class="note hint">点词收起中文并记为学会，再点恢复；链接里用 Alt＋点击。</p>
+
+<details>
+  <summary>设置</summary>
+  <label class="field">字幕提前处理<select id="lead" disabled><option value="6">6 帧</option><option value="12">12 帧</option><option value="24">24 帧</option><option value="48">48 帧</option></select></label>
+  <label class="field">主机地址<input id="connection-url" type="url" placeholder="http://192.168.1.20:8040" spellcheck="false"></label>
+  <label class="field">访问密钥<input id="connection-key" type="password" autocomplete="off" placeholder="本机连接可留空"></label>
+  <button id="connection-save">保存并连接</button>
+  <p id="connection-message" class="note" role="status"></p>
+  <a id="connection-open" href="http://127.0.0.1:8040" target="_blank" rel="noreferrer">打开本机 Echo</a>
+</details>
+<script src="connection.js"></script><script src="connection-settings.js"></script>
+<script src="popup.js"></script><script src="youtube-popup.js"></script></body></html>

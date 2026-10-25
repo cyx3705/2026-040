@@ -1,10 +1,10 @@
 """echo-serve：启动私有引擎，提供对话页面和接口。"""
 
+import argparse
 import asyncio
 import hashlib
 import json
 import re
-import sys
 import uuid
 import webbrowser
 from contextlib import asynccontextmanager
@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import config, levels, practice, predict, reader, setup
+from . import config, levels, practice, predict, reader, setup, web_access
 from .dictionary import Dictionary
 from .engine import Engine
 from .input_bridge import InputBridge
@@ -55,6 +55,7 @@ async def use_engine():
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    web_access.configure(app)
     engine.parallel = int(store.setting("engine_parallel", str(config.ENGINE_PARALLEL)))
     if engine.installed:
         engine.start()
@@ -78,6 +79,7 @@ class RevalidatedStaticFiles(StaticFiles):
 
 
 app = FastAPI(title="Echo", lifespan=lifespan)
+app.add_middleware(web_access.ExtensionAccessMiddleware)
 app.mount("/static", RevalidatedStaticFiles(directory=STATIC), name="static")
 
 
@@ -582,6 +584,11 @@ def learned() -> list[dict]:
 
 class ReaderRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1600)
+    # KV-001: page/video identity from the extension; only its digest reaches disk.
+    session: str | None = Field(default=None, min_length=1, max_length=300)
+
+
+reader_contexts = reader.Contexts(config.KV_SESSION_DIR)
 
 
 @app.get("/api/reader/learned")
@@ -596,9 +603,12 @@ async def reader_gloss(req: ReaderRequest, request: Request):
         # Same admission lock as chat/prediction: webpage prefill never replaces
         # an active chat A. At most two ephemeral suffixes use the unified pool.
         async with use_engine(), _sequence_slot:
-            async for event in reader.events(req.text, dictionary, engine, current_model(),
-                    predict.template_of(model_family(current_model())) or "chatml",
-                    parallel=engine.parallel, disconnected=request.is_disconnected):
+            model = current_model()
+            async for event in reader.events(req.text, dictionary, engine, model,
+                    predict.template_of(model_family(model)) or "chatml",
+                    parallel=engine.parallel, disconnected=request.is_disconnected,
+                    session=reader.session_digest(model, req.session) if req.session else None,
+                    contexts=reader_contexts):
                 yield sse(event)
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -918,15 +928,27 @@ def already_running(url: str) -> bool:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Echo 本机应用与可选跨设备伴读服务")
+    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--share", action="store_true", help="在局域网/私有网络共享两款插件接口")
+    args = parser.parse_args()
+    if args.share:
+        config.WEB_HOST = "0.0.0.0"
     url = f"http://127.0.0.1:{config.WEB_PORT}"
-    open_browser = "--no-browser" not in sys.argv
+    open_browser = not args.no_browser
     # 再点一次快捷方式时 Echo 已经在跑：只打开页面，不再抢端口
     if already_running(url):
         print(f"Echo 已在 {url} 运行")
+        if args.share:
+            print("共享模式需退出原服务后，使用 echo-serve --share 重新启动。")
         if open_browser:
             webbrowser.open(url)
         return
     print(f"Echo 运行在 {url}（关掉本窗口即退出 Echo）")
+    web_access.configure(app)  # Validate before opening a browser or starting the engine.
+    if not web_access.loopback(config.WEB_HOST):
+        print(f"插件共享监听 {config.WEB_HOST}:{config.WEB_PORT}；其他设备填写本机的局域网/私有网络地址。")
+        print("共享密钥来自 ECHO_SHARE_KEY。" if config.SHARE_KEY else f"共享密钥保存在 {config.SHARE_KEY_FILE}")
     if open_browser:
         webbrowser.open(url)
-    uvicorn.run(app, host="127.0.0.1", port=config.WEB_PORT, log_level="warning")
+    uvicorn.run(app, host=config.WEB_HOST, port=config.WEB_PORT, log_level="warning", proxy_headers=False)

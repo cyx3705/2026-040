@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -28,6 +30,51 @@ def find_model_blob(model: str) -> Path:
 class SequenceRequest(BaseModel):
     model: str
     text: str = Field(max_length=20000)
+    # Server-side digest of model + page/video; never a client path.
+    session: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class SessionFiles:
+    """KV-001: one state file per reader session; newest kept within a byte/file budget."""
+
+    def __init__(self, directory: Path, max_bytes: int, max_files: int) -> None:
+        self.directory, self.max_bytes, self.max_files = directory, max_bytes, max_files
+        self._timer: threading.Timer | None = None
+        self._lock = threading.Lock()
+
+    def path(self, digest: str) -> Path:
+        return self.directory / f"{digest}.kv"
+
+    def prune(self, keep: Path) -> None:
+        now, total, files = time.time(), 0, []
+        for item in self.directory.glob("*.kv*"):
+            try:
+                stat = item.stat()
+            except OSError:
+                continue
+            if item.suffix == ".tmp":
+                if now - stat.st_mtime > 3600:  # Left by a killed save.
+                    item.unlink(missing_ok=True)
+            else:
+                files.append((stat.st_mtime, stat.st_size, item))
+        for index, (_, size, item) in enumerate(sorted(files, key=lambda x: x[0], reverse=True)):
+            total += size
+            if item != keep and (index >= self.max_files or total > self.max_bytes):
+                item.unlink(missing_ok=True)
+
+    def flush_later(self, runtime: NativeKVRuntime, delay: float = 2.0) -> None:
+        # Debounced idle write: a page closed or an adapter killed later loses nothing.
+        def run():
+            try:
+                runtime.flush_session()
+            except (KVUnsupported, RuntimeError):
+                pass
+        with self._lock:
+            if self._timer:
+                self._timer.cancel()
+            self._timer = threading.Timer(delay, run)
+            self._timer.daemon = True
+            self._timer.start()
 
 
 class ForkRequest(BaseModel):
@@ -66,7 +113,7 @@ class TopTokensRequest(BaseModel):
     top_k: int = Field(default=20, ge=1, le=20)
 
 
-def make_app(runtime: NativeKVRuntime) -> FastAPI:
+def make_app(runtime: NativeKVRuntime, sessions: SessionFiles | None = None) -> FastAPI:
     app = FastAPI(title="Echo native KV adapter")
 
     @app.get("/v1/kv/capabilities")
@@ -77,7 +124,7 @@ def make_app(runtime: NativeKVRuntime) -> FastAPI:
 
     @app.get("/v1/kv/runtime")
     def runtime_info():
-        return runtime.runtime_info()
+        return {**runtime.runtime_info(), "reader_sessions": sessions is not None}
 
     @app.post("/v1/kv/chat")
     async def chat(req: ChatRequest):
@@ -131,6 +178,13 @@ def make_app(runtime: NativeKVRuntime) -> FastAPI:
         try:
             if req.model != runtime.model_name:
                 raise KVUnsupported("model_mismatch")
+            if req.session and sessions:
+                path = sessions.path(req.session)
+                if path.exists():
+                    os.utime(path)  # Recency for pruning includes read-only revisits.
+                handle = runtime.create_session(req.text, str(path))
+                sessions.prune(path)
+                return handle.__dict__
             return runtime.create_sequence(req.text).__dict__
         except (KVUnsupported, RuntimeError) as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -176,6 +230,8 @@ def make_app(runtime: NativeKVRuntime) -> FastAPI:
     @app.post("/v1/kv/sequences/{sequence_id}/release")
     def release_sequence(sequence_id: str, req: dict):
         runtime.clear_sequence(SequenceHandle(sequence_id, str(req.get("cache_epoch", "")), 0))
+        if sessions:
+            sessions.flush_later(runtime)
         return {"released": True}
 
     return app
@@ -194,7 +250,13 @@ def main(argv: list[str] | None = None) -> None:
     library = config.ENGINE_DIR / "lib" / "ollama" / "libllama.dll"
     runtime = NativeKVRuntime(model, library, args.context, args.gpu_layers)
     runtime.model_name = args.model
-    app = make_app(runtime)
+    # The bundled llama opens state files with narrow fopen: keep the path ASCII.
+    directory = config.KV_SESSION_DIR
+    sessions = None
+    if str(directory).isascii():
+        directory.mkdir(parents=True, exist_ok=True)
+        sessions = SessionFiles(directory, config.KV_SESSION_BYTES, config.KV_SESSION_FILES)
+    app = make_app(runtime, sessions)
     try:
         uvicorn.run(app, host="127.0.0.1", port=args.port)
     finally:

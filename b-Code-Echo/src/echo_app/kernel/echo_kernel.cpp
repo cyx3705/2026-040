@@ -53,7 +53,11 @@ struct Sequence {
     void* sampler = nullptr;
     int next = -1;
     Clock::time_point touched = Clock::now();
+    bool session = false;
 };
+// KV-001: a reader session's seq0 cache. Python names the file; switching to
+// another session, chat, prediction or shutdown writes it there first.
+struct Resident { std::string path; Tokens tokens; bool dirty = false; };
 struct Branch {
     uint64_t id, source;
     int prefix, steps = 0;
@@ -100,6 +104,9 @@ public:
     std::vector<PredictionScore> prediction_scores;
     Clock::time_point prediction_touched = Clock::now();
     int prediction_reused = 0, prediction_evaluated = 0;
+    std::unique_ptr<Resident> resident;
+    uint64_t session_saves = 0, session_loads = 0, session_save_failures = 0;
+    int session_reused = 0, session_evaluated = 0, session_loaded = 0;
 
     Runtime(Api functions, const std::string& path, int window, int gpu) : api(functions), context(window) {
         require(window >= 1024, "invalid_context_size");
@@ -121,6 +128,8 @@ public:
     }
     ~Runtime() { cleanup(); }
     void cleanup() {
+        // Shutdown keeps the reader context for the next start; never throw here.
+        if (ctx && resident) { try { evict(); } catch (...) {} }
         if (a && a->sampler) api.sampler_free(a->sampler);
         a.reset(); b.reset();
         if (batch) api.batch_ext_free(batch);
@@ -140,7 +149,8 @@ public:
         std::lock_guard lock(mutex);
         if (!a || a->id != id) return;
         if (b) release_b(b->id);
-        require(api.memory_seq_rm(memory, 0, -1, -1), "sequence_release_failed");
+        // A session's prefix stays resident in seq0 for its next request.
+        if (!a->session) require(api.memory_seq_rm(memory, 0, -1, -1), "sequence_release_failed");
         if (a->sampler) api.sampler_free(a->sampler);
         a.reset();
     }
@@ -150,6 +160,68 @@ public:
         require(api.memory_seq_rm(memory, 0, -1, -1), "prediction_release_failed");
         prediction_tokens.clear();
         prediction_reused = prediction_evaluated = 0;
+    }
+    // Write the resident session when changed. Callers hold the lock and no A.
+    void save() {
+        if (!resident || !resident->dirty || resident->tokens.empty()) return;
+        auto& item = *resident;
+        auto target = std::filesystem::u8path(item.path), temporary = std::filesystem::u8path(item.path + ".tmp");
+        // Write beside, then replace: a crash never leaves a half file under the real name.
+        bool ok = api.state_seq_save_file(ctx, (item.path + ".tmp").c_str(), 0, item.tokens.data(), item.tokens.size()) > 0;
+        std::error_code error;
+        if (ok) { std::filesystem::rename(temporary, target, error); ok = !error; }
+        if (ok) { ++session_saves; item.dirty = false; }
+        else { ++session_save_failures; std::filesystem::remove(temporary, error); }
+    }
+    void evict() {
+        if (!resident) return;
+        save(); resident.reset();
+        require(api.memory_seq_rm(memory, 0, -1, -1), "session_release_failed");
+    }
+    // Idle write-back, so a killed adapter loses nothing already translated.
+    void flush() {
+        std::lock_guard lock(mutex);
+        if (!a) save();
+    }
+    std::pair<uint64_t, int> begin_session(const std::string& prompt, const std::string& path) {
+        std::lock_guard lock(mutex); expire(); require(!a, "only_one_A_sequence_supported");
+        require(!path.empty(), "invalid_session_path");
+        auto tokens = tokenize(prompt, true);
+        require(!tokens.empty() && tokens.size() <= size_t(context - 768), "context_limit");
+        session_loaded = 0;
+        if (!resident || resident->path != path) {
+            evict(); discard_prediction();
+            auto next = std::make_unique<Resident>(); next->path = path;
+            std::error_code error;
+            if (std::filesystem::exists(std::filesystem::u8path(path), error)) {
+                Tokens loaded(context); size_t count = 0;
+                // A stale, foreign or truncated file is only a cache miss.
+                if (api.state_seq_load_file(ctx, path.c_str(), 0, loaded.data(), loaded.size(), &count) > 0 &&
+                    count > 0 && count <= loaded.size() && api.memory_seq_pos_max(memory, 0) == int(count) - 1) {
+                    loaded.resize(count); next->tokens = std::move(loaded);
+                    ++session_loads; session_loaded = int(count);
+                } else require(api.memory_seq_rm(memory, 0, -1, -1), "session_release_failed");
+            }
+            resident = std::move(next);
+        }
+        auto& r = *resident;
+        size_t common = 0;
+        while (common < tokens.size() && common < r.tokens.size() && tokens[common] == r.tokens[common]) ++common;
+        try {
+            if (common < r.tokens.size()) {
+                require(api.memory_seq_rm(memory, 0, int(common), -1), "session_trim_failed");
+                r.tokens.resize(common); r.dirty = true;
+            }
+            if (common < tokens.size()) {
+                decode(Tokens(tokens.begin() + common, tokens.end()), 0, int(common));
+                r.dirty = true;
+            }
+        } catch (...) { resident.reset(); api.memory_seq_rm(memory, 0, -1, -1); throw; }
+        r.tokens = tokens;
+        session_reused = int(common); session_evaluated = int(tokens.size() - common);
+        auto next = std::make_unique<Sequence>();
+        next->id = ++serial; next->prefix = int(tokens.size()); next->tokens = std::move(tokens); next->session = true;
+        auto result = std::make_pair(next->id, next->prefix); a = std::move(next); return result;
     }
     void expire() {
         auto now = Clock::now();
@@ -213,7 +285,7 @@ public:
         require(tokens.size() <= size_t(context - 768), "context_limit");
         // Formal A always starts clean, preserving seeded A/B isolation and the
         // entire original KV budget. Prediction cache has no public A handle.
-        discard_prediction();
+        evict(); discard_prediction();
         auto next = std::make_unique<Sequence>();
         next->id = ++serial; next->prefix = int(tokens.size()); next->tokens = std::move(tokens);
         try {
@@ -422,6 +494,7 @@ public:
     std::string predict(const std::string& prompt, int limit) {
         std::lock_guard lock(mutex); require(limit >= 1 && limit <= 20, "invalid_top_k");
         expire(); require(!a && !b, "only_one_A_sequence_supported");
+        evict();
         auto tokens = tokenize(prompt, true);
         require(!tokens.empty() && tokens.size() <= size_t(context - 768), "context_limit");
         prediction_reused = prediction_evaluated = 0;
@@ -460,15 +533,23 @@ public:
     std::string info() {
         std::lock_guard lock(mutex); expire();
         int tokens = a ? int(a->tokens.size()) : 0;
+        // An idle resident session still occupies seq0 cells.
+        int idle = !a && resident ? int(resident->tokens.size()) : 0;
         int shared = b ? b->prefix : 0;
         int exclusive = b ? std::max(0, api.memory_seq_pos_max(memory, 1) + 1 - b->prefix) : 0;
-        return "{\"kernel\":\"cpp\",\"kernel_abi\":1,\"active_sequences\":" + std::to_string(a ? 1 : 0) +
+        return "{\"kernel\":\"cpp\",\"kernel_abi\":2,\"active_sequences\":" + std::to_string(a ? 1 : 0) +
             ",\"active_branches\":" + std::to_string(b ? 1 : 0) + ",\"a_tokens\":" + std::to_string(tokens) +
             ",\"b_shared_positions\":" + std::to_string(shared) + ",\"b_suffix_positions\":" + std::to_string(exclusive) +
             ",\"prediction_cached_tokens\":" + std::to_string(prediction_tokens.size()) +
             ",\"prediction_reused_tokens\":" + std::to_string(prediction_reused) +
             ",\"prediction_evaluated_tokens\":" + std::to_string(prediction_evaluated) +
-            ",\"logical_unique_positions\":" + std::to_string(tokens + exclusive + prediction_tokens.size()) +
+            ",\"logical_unique_positions\":" + std::to_string(tokens + idle + exclusive + prediction_tokens.size()) +
+            ",\"session_tokens\":" + std::to_string(resident ? resident->tokens.size() : 0) +
+            ",\"session_reused_tokens\":" + std::to_string(session_reused) +
+            ",\"session_evaluated_tokens\":" + std::to_string(session_evaluated) +
+            ",\"session_loaded_tokens\":" + std::to_string(session_loaded) +
+            ",\"session_loads\":" + std::to_string(session_loads) + ",\"session_saves\":" + std::to_string(session_saves) +
+            ",\"session_save_failures\":" + std::to_string(session_save_failures) +
             ",\"fork_count\":" + std::to_string(forks) + ",\"release_count\":" + std::to_string(releases) +
             ",\"input_batch_max\":2,\"context_size\":" + std::to_string(context) + '}';
     }
@@ -506,7 +587,7 @@ static void output(char** result, const std::string& text) {
     auto buffer = std::make_unique<char[]>(text.size()+1);
     std::memcpy(buffer.get(), text.c_str(), text.size()+1); *result = buffer.release();
 }
-EXPORT int echo_abi() { return 1; }
+EXPORT int echo_abi() { return 2; }
 EXPORT const char* echo_error() { return last_error.c_str(); }
 EXPORT void echo_free(void* p) { delete[] static_cast<char*>(p); }
 EXPORT int echo_open(const wchar_t* library, const char* model, int context, int gpu, void** result) {
@@ -515,6 +596,12 @@ EXPORT int echo_open(const wchar_t* library, const char* model, int context, int
 EXPORT void echo_close(void* runtime) { delete static_cast<echo::Runtime*>(runtime); }
 EXPORT int echo_begin(void* p, const char* text, uint32_t seed, bool sample, uint64_t* id, int* prefix) {
     return protect([&] { auto r = static_cast<echo::Runtime*>(p)->begin(text, seed, sample); *id = r.first; *prefix = r.second; });
+}
+EXPORT int echo_session_begin(void* p, const char* text, const char* path, uint64_t* id, int* prefix) {
+    return protect([&] { auto r = static_cast<echo::Runtime*>(p)->begin_session(text, path); *id = r.first; *prefix = r.second; });
+}
+EXPORT int echo_session_flush(void* p) {
+    return protect([&] { static_cast<echo::Runtime*>(p)->flush(); });
 }
 EXPORT int echo_step(void* p, uint64_t id, bool* done, char** text) {
     return protect([&] { auto r = static_cast<echo::Runtime*>(p)->step(id); *done = r.first; output(text, r.second); });
