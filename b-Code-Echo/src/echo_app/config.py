@@ -34,8 +34,8 @@ KV_ADAPTER_GPU_LAYERS = int(os.environ.get("ECHO_KV_GPU_LAYERS", "99"))
 KV_ADAPTER_LOG = DATA_DIR / "kv-adapter.log"
 # KV-001: per page/video reader context on disk, so returning resumes without prefill.
 KV_SESSION_DIR = DATA_DIR / "reader-kv"
-KV_SESSION_BYTES = int(os.environ.get("ECHO_KV_SESSION_BYTES", str(4 * 1024**3)))
-KV_SESSION_FILES = int(os.environ.get("ECHO_KV_SESSION_FILES", "32"))
+KV_SESSION_BYTES = int(os.environ.get("ECHO_KV_SESSION_BYTES", str(16 * 1024**3)))
+KV_SESSION_FILES = int(os.environ.get("ECHO_KV_SESSION_FILES", "128"))
 
 WEB_PORT = int(os.environ.get("ECHO_WEB_PORT", "8040"))
 WEB_HOST = os.environ.get("ECHO_WEB_HOST", "127.0.0.1").strip()
