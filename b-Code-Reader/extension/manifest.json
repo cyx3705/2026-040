@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Echo 英语伴读",
-  "version": "0.6.0",
+  "version": "0.7.2",
   "description": "网页与 YouTube 字幕统一伴读，自动恢复闲置连接，共用 Echo 主机与学习记录。",
   "permissions": [
     "storage",
@@ -30,6 +30,7 @@
         "https://www.youtube.com/*"
       ],
       "js": [
+        "youtube-player.js",
         "caption-bridge.js"
       ],
       "world": "MAIN",
@@ -40,6 +41,7 @@
         "https://www.youtube.com/*"
       ],
       "js": [
+        "youtube-player.js",
         "timeline-core.js",
         "youtube-content.js"
       ],

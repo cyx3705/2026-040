@@ -15,7 +15,7 @@
   // YT-009: finished glosses are kept per video in extension storage and written
   // before the page goes away, so reopening a video resumes instead of recomputing.
   const STORE = 'echoYouTubeGlosses:', STORE_INDEX = 'echoYouTubeGlossIndex', STORE_VIDEOS = 60;
-  const ITEM_KEYS = ['start', 'end', 'word', 'lemma', 'gloss', 'state', 'fallback_reason'];
+  const ITEM_KEYS = ['start', 'end', 'word', 'lemma', 'gloss', 'state', 'source', 'fallback_reason'];
   let saved = {id: '', texts: {}, loading: null}, saveTimer, dirty = false, savedIndex = [];
   const idNow = () => {
     const url = new URL(location.href);
@@ -57,7 +57,8 @@
     // A word saved as learned but since restored needs its gloss computed again.
     if (ready && stale(entry)) entry.done = false;
   }
-  const stale = entry => [...entry.items.values()].some(item => item.state === 'skipped_learned' && !learned.has(item.lemma));
+  const stale = entry => [...entry.items.values()].some(item =>
+    ['skipped_learned', 'missing'].includes(item.state) && !learned.has(item.lemma));
   function restore(id) {
     const state = saved = {id, texts: {}, loading: null};
     if (!id) return;
@@ -74,7 +75,7 @@
     }).catch(() => {}).finally(() => { if (saved === state) { state.loading = null; if (dirty) schedule(); tick(); } });
   }
   function remember(entry) {
-    if (!saved.id) return;
+    if (!saved.id || [...entry.items.values()].some(item => item.source === 'model' && item.state === 'degraded')) return;
     saved.texts[entry.text] = [...entry.items.values()].map(item => Object.fromEntries(ITEM_KEYS.filter(key => item[key] != null).map(key => [key, item[key]])));
     dirty = true; schedule();
   }
@@ -114,6 +115,9 @@
       .en{grid-row:1;white-space:pre}.zh{position:absolute;bottom:0;left:0;width:100%;height:1.7em;font:.65em/1.7 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#dcebe6}
       .token[data-degraded] .zh{text-decoration:underline wavy currentColor;text-underline-offset:2px}
       .punct{white-space:pre;line-height:1.35}
+      :host([data-portrait]){left:3%;width:84%;bottom:22%;font-size:var(--echo-portrait-font,14px)}
+      :host([data-portrait]) .panel{max-height:var(--echo-portrait-height,40vh);overflow:auto;pointer-events:auto;overscroll-behavior:contain}
+      :host([data-portrait]) .token{grid-template-columns:minmax(2.8em,max-content)}
     `;
     const panel = document.createElement('div'); panel.className = 'panel';
     slots = [0, 1].map(index => {
@@ -142,12 +146,20 @@
       button.toggleAttribute('data-known', known);
       button.toggleAttribute('data-degraded', item.state === 'degraded' && !known);
       button.title = known ? '已学会 · 点击恢复中文' :
-        `${item.gloss || ''}${item.state === 'pending' ? ' · 正在选义' : ''}${item.fallback_reason ? ` · 默认释义：${item.fallback_reason}` : ''} · 点击标熟`;
+        `${item.gloss || ''}${item.source === 'model' ? ' · 模型补译' : ''}${item.state === 'pending' ? ' · 正在选义' : ''}${item.fallback_reason ? ` · 处理状态：${item.fallback_reason}` : ''} · 点击标熟`;
     }
   }
   function show(entry, cueKey) {
     overlay();
     if (!host) return;
+    const bounds = player.getBoundingClientRect();
+    const portrait = location.pathname.startsWith('/shorts/') || bounds.height > bounds.width ||
+      (media?.videoHeight > media?.videoWidth && media.videoWidth > 0);
+    host.toggleAttribute('data-portrait', portrait);
+    if (portrait) {
+      host.style.setProperty('--echo-portrait-font', `${Math.max(12, Math.min(20, bounds.width / 22))}px`);
+      host.style.setProperty('--echo-portrait-height', `${Math.max(80, bounds.height * .55)}px`);
+    }
     if (lastCue !== cueKey) {
       activeSlot = activeSlot < 0 ? 1 : 1 - activeSlot; lastCue = cueKey;
       const slot = slots[activeSlot], line = slot.line;
@@ -305,7 +317,9 @@
       flush(); clearCache(); cues = []; track = ''; source = 'waiting'; videoId = nextId; restore(videoId); bridge('stop');
       if (videoId) bridge('request-timeline');
     }
-    const nextPlayer = videoId && document.querySelector('#movie_player, .html5-video-player');
+    // YT-011: list pages have no playback target. A hover preview can precede
+    // the actual watch player in DOM order, so prefer the dedicated player.
+    const nextPlayer = globalThis.EchoYouTubePlayer.select(videoId);
     if (player !== nextPlayer) {
       resetDisplay(); player?.removeAttribute('data-echo-youtube-active'); host?.remove(); host = null;
       slots = []; player = nextPlayer;
@@ -344,7 +358,7 @@
     const visible = slots.map(slot => slot.entry).filter(Boolean);
     const wanted = [...new Set([...(current ? [current] : []), ...visible.filter(entry => !entry.done), ...upcoming])].slice(0, 3);
     for (const entry of cache.values()) if (entry.id && !wanted.includes(entry)) cancel(entry);
-    if (ready && port && (plan || performance.now() - liveChanged >= 120)) for (const entry of wanted) if (!entry.done && !entry.id && Date.now() >= (entry.retryAt || 0)) {
+    if (ready && port && !saved.loading && (plan || performance.now() - liveChanged >= 120)) for (const entry of wanted) if (!entry.done && !entry.id && Date.now() >= (entry.retryAt || 0)) {
       entry.complete = false; entry.id = `${generation}:${++serial}`; requests.set(entry.id, entry);
       try { port.postMessage({type: 'gloss', id: entry.id, text: entry.text, priority: entry === current, session: `yt:${videoId}`}); }
       catch { connectionLost(port); break; }

@@ -28,6 +28,7 @@ class KVCapabilities:
     label_constraint: bool
     release: bool
     reason: str | None = None
+    provider_parallel_slots: int | None = None
 
     @classmethod
     def unsupported(cls, backend: str, reason: str) -> "KVCapabilities":
@@ -180,14 +181,14 @@ class RemoteKVBackend:
             raise KVUnsupported("adapter_invalid_top_tokens_response")
         return items
 
-    async def chat(self, model: str, prompt: str, on_sequence: Callable[[SequenceHandle], None]) -> Any:
+    async def chat(self, model: str, prompt: str, on_sequence: Callable[[SequenceHandle], None], *, max_tokens: int = 1024) -> Any:
         """Stream A from the native runtime and retain its actual sequence for B."""
         if not self.base_url:
             raise KVUnsupported("adapter_not_configured")
         import json
 
         async with self.client.stream("POST", f"{self.base_url}/v1/kv/chat", json={
-            "model": model, "prompt": prompt, "max_tokens": 1024,
+            "model": model, "prompt": prompt, "max_tokens": max_tokens,
         }, timeout=httpx.Timeout(300, connect=5)) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():

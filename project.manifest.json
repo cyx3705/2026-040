@@ -45,18 +45,13 @@
   },
   "commands": {
     "setup": "uv run --project b-Code-Echo echo-setup",
-    "upgrade": "uv run --project b-Code-Echo echo-upgrade",
-    "kvAdapter": "uv run --project b-Code-Echo echo-kv-adapter",
-    "build": "uv run --project b-Code-Echo echo-build-kernel",
+    "build": "uv run --project b-Code-Echo echo-build-input",
     "test": "uv run --project b-Code-Echo python -m unittest discover -s b-Code-Echo/tests",
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
     "run": "uv run --project b-Code-Echo echo-serve",
     "runShared": "uv run --project b-Code-Echo echo-serve --share",
     "package": null,
-    "testNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_acceptance.py --cycles 1000",
-    "testPerformance": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_performance.py --repeats 3",
-    "testKernel": "uv run --project b-Code-Echo echo-build-kernel --test",
-    "testSuggestPerformance": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_suggest_performance.py --repeats 5",
+    "testKernel": "uv run --project b-Code-Echo echo-build-input --test",
     "testSuggestUI": "node b-Code-Echo/tests/suggest_queue.cjs",
     "testInputUI": "node b-Code-Echo/tests/composer_input.cjs",
     "testReaderUI": "node b-Code-Reader/tests/reader_core.cjs",
@@ -67,13 +62,13 @@
     "testYouTubeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs",
     "testYouTubeUI": "node b-Code-YouTube/tests/timeline_core.cjs",
     "testYouTubeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live",
-    "testReaderNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_reader_acceptance.py",
-    "testReaderSessionNative": "uv run --project b-Code-Echo python b-Code-Echo/tests/native_session_acceptance.py",
-    "testApiComparison": "uv run --project b-Code-Echo python b-Code-Echo/tests/api_comparison.py --mode native --out b-Office/technical-report/tmp/bench/native.json",
     "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1",
     "testRecoveryBrowser": "node b-Code-Reader/tests/recovery_browser.cjs",
     "testYouTubeUpgradeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs --upgrade",
-    "testYouTubeUpgradeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live --upgrade"
+    "testYouTubeUpgradeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live --upgrade",
+    "testExternalLive": "uv run --project b-Code-Echo python b-Code-Echo/tests/external_service_acceptance.py --live",
+    "testSharedKVLive": "uv run --project b-Code-Echo python b-Code-Echo/tests/external_service_acceptance.py --live --require-shared-kv",
+    "testModelUI": "node b-Code-Echo/tests/model_switch_browser.cjs"
   },
   "components": [
     {
@@ -84,23 +79,24 @@
     {
       "id": "browser-extension",
       "path": "b-Code-Reader/extension",
-      "purpose": "ARCH-002 / WEB-001～008 / YT-001～008 / NET-001：统一 Edge/Chrome MV3 网页与 YouTube 字幕伴读；一个连接设置、学习广播和有界后台队列；闲置断线重连，保留完成释义，仅重试中断段落/字幕；YT-007 弹窗补注入升级前已打开页面的字幕脚本；YT-008 字幕统一使用网页后台协议，兼容旧后台并保留翻译连接错误；WEB-008 标熟/恢复已有释义只改显示，拒绝过期学习轮询，未翻译出现位置仅补原分块"
+      "purpose": "ARCH-002 / WEB-001～009 / YT-001～013 / NET-001：统一 Edge/Chrome MV3 网页与 YouTube 字幕伴读；一个连接设置、学习广播和有界后台队列；闲置断线重连，保留完成释义，仅重试中断段落/字幕；YT-007 弹窗补注入升级前已打开页面的字幕脚本；YT-008 字幕统一使用网页后台协议，兼容旧后台并保留翻译连接错误；WEB-008 标熟/恢复已有释义只改显示，拒绝过期学习轮询，未翻译出现位置仅补原分块；YT-011 列表页点击进入视频自动翻译，排除悬停预览播放器；YT-012 通过 youtube-player.js 在页面与隔离世界共用活动 Shorts 播放器选择，竖屏布局与切换/返回缓存复用；WEB-009 词典缺词由当前模型按上下文补译，标注来源，升级刷新旧缺词缓存；YT-013 竖屏自动开启字幕、切换和重置后恢复，关闭 Echo 时停止"
     }
   ],
   "externalDependencies": [
     {
+      "name": "WSL GNU C++ / CMake（仅统一服务共享 KV 与 C++ HTTP 构建）",
+      "purpose": "ECHO-KV-001/002/004、ECHO-SVC-003：服务工作区 scripts/echo-kv/build.sh 校验固定上游源码摘要，编译 server 层与 echo-proxy C++ HTTP 入口，复用已有 libllama/ggml/CUDA 和 cpp-httplib/nlohmann 源码；高频聊天、预测、共享 KV 和 SSE 不经过 Python HTTP 代理。模型切换/磁盘快照仍用既有管理脚本。Echo 应用本身无需 Linux 编译器、不加载模型，也不执行服务构建。",
+      "source": "https://github.com/ggml-org/llama.cpp/tree/9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e"
+    },
+    {
+      "name": "外部推理服务（OpenAI Chat Completions + llama-server 概率扩展）",
+      "purpose": "EXT-001～004：仅消费外部 HTTP，不在 Echo 管理推理进程或加载权重；models、流式/非流式 chat/completions、JSON Schema；输入预测另需 /completion 的 n_predict/n_probs/top_logprobs。默认模型 qwen3.5:35b-a3b-q4_K_M。ECHO-SVC-001/002/003：C++ HTTP 入口、只读实际能力、上游取消；逐请求磁盘匹配和旧 Python 代理统计已停用，模型提示缓存/后台快照保留。ECHO-KV-001：可选 /v1/kv/op 在同一模型进程/上下文提供 A/B 分叉、混合循环检查点与有界前缀重放、单 token 标签选义和释放；统一服务为单模型有界两槽，ECHO-KV-004 能力启用时 A 用一条 SSE 在服务内持续生成并优先入队，旧服务单步兼容；B 完成或取消即释放，全部公共槽及 A/B 忙时推迟快照；未支持时使用原结构化 HTTP 路径。ECHO-MODEL-001：可选 /v1/echo/models 与 /v1/echo/model 由统一服务负责全局模型切换、进度、缓存保存/恢复和失败回退。",
+      "endpoint": "http://127.0.0.1:11435/v1"
+    },
+    {
       "name": "pdfLaTeX / TeX Live（仅报告构建）",
       "purpose": "reportBuild 使用 pdfLaTeX（与 arXiv 编译一致；arXiv 不接受 XeLaTeX/LuaLaTeX 源码）及 CJKutf8（gbsn 字体）、Latin Modern、microtype、TikZ、booktabs、hyperref 和标准 LaTeX 数学/图形包；使用 TeX 自带字体，不依赖 Windows 私有字体；运行 Echo 无需 TeX",
       "source": "https://tug.org/texlive/"
-    },
-    {
-      "name": "Ollama（自带）",
-      "purpose": "私有推理实例：%USERPROFILE%\\.echo\\engine，端口 11540，模型目录 %USERPROFILE%\\.echo\\models；不用本机 Ollama 的服务",
-      "endpoint": "http://127.0.0.1:11540"
-    },
-    {
-      "name": "qwen3:8b",
-      "purpose": "默认模型（Ollama 拉取）"
     },
     {
       "name": "ECDICT",
@@ -108,13 +104,8 @@
       "source": "https://github.com/skywind3000/ECDICT"
     },
     {
-      "name": "llama.cpp（Ollama bundled libllama）",
-      "purpose": "同一模型和统一 KV 池中的 A 正文、输入候选、Ctrl 中文转英文、网页原文预填与最多两个 B 的批处理单步选择；由 Echo 自建适配层调用 bundled DLL，不修改第三方二进制",
-      "source": "https://github.com/ggml-org/llama.cpp"
-    },
-    {
       "name": "Visual Studio C++ Build Tools + Windows SDK",
-      "purpose": "构建 Echo 自有 Windows x64 C++ 推理内核及独立的 User32/IMM/GDI 原生中文输入桥；产物保存在数据目录 native/<源码摘要>，不修改 bundled libllama",
+      "purpose": "构建 Echo 自有 Windows User32/IMM/GDI 中文输入桥；编译产物在数据目录 native/，不安装或加载推理模型。既有原生内核源码仅保留作历史研究。",
       "source": "https://visualstudio.microsoft.com/visual-cpp-build-tools/"
     },
     {
@@ -124,11 +115,11 @@
     },
     {
       "name": "Edge / Chrome Manifest V3",
-      "purpose": "只加载 b-Code-Reader/extension（0.6.0）；统一网页自动伴读与 YouTube 交替字幕/预取，NET-001 共用主机地址/密钥，模型和学习库保持一份"
+      "purpose": "只加载 b-Code-Reader/extension（0.7.2）；统一网页自动伴读与 YouTube 交替字幕/预取，NET-001 共用主机地址/密钥，模型和学习库保持一份"
     },
     {
       "name": "Playwright + 已安装 Microsoft Edge（仅扩展验收）",
-      "purpose": "testReaderBrowser / testYouTubeBrowser / testYouTubeUpgradeBrowser / testRecoveryBrowser / testConnectionBrowser 使用临时 Edge 验证同一真实 MV3；Recovery 模拟端口断开、流中断和离线恢复，Connection 使用隔离真实 HTTP 服务；Live（含 testYouTubeUpgradeLive 的旧后台协议边界）连接真实 Echo/C++ 且只读学习库，需空闲服务；Node 需能解析 playwright（可用 NODE_PATH）",
+      "purpose": "网页/YouTube/恢复/连接与模型菜单测试使用隔离 Edge 与模拟 Echo HTTP 服务；Live 测试依赖实际 Echo 外部服务链路，仅在明确授权时另验。Node 需能解析 playwright（可用 NODE_PATH）。",
       "source": "https://playwright.dev/"
     },
     {

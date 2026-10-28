@@ -8,25 +8,13 @@ import math
 import re
 import json
 
-import httpx
 
 from . import config
 
-TOP_N = 20       # Ollama 0.40.7 的 top_logprobs 上限，21 即返回 HTTP 400
+TOP_N = 20       # Echo limits the candidate distribution to 20 tokens.
 PUNCT = {".", ",", "?", "!"}
 _PARTIAL = re.compile(r"[A-Za-z']+$")
 _LEAD = re.compile(r"^[A-Za-z']*")
-
-
-_client: httpx.AsyncClient | None = None
-
-
-def _shared_client() -> httpx.AsyncClient:
-    """复用一个客户端：Windows 上每新建一个要加载一次证书库，约 0.5 秒。"""
-    global _client
-    if _client is None:
-        _client = httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5))
-    return _client
 
 
 def template_of(family: str) -> str | None:
@@ -142,22 +130,6 @@ def render(template: str, system: str, messages: list[dict], user_text: str) -> 
     return head + "".join(turn(m["role"], m["content"]) for m in messages) + open_user + user_text
 
 
-async def _generate(client: httpx.AsyncClient, model: str, prompt: str, **options) -> dict:
-    body = {
-        "model": model,
-        "prompt": prompt,
-        "raw": True,
-        "stream": False,
-        "keep_alive": config.KEEP_ALIVE,
-        "options": {"temperature": 0, **options},
-    }
-    if "top_logprobs" in options:
-        body["logprobs"] = True
-        body["top_logprobs"] = options.pop("top_logprobs")
-        body["options"] = {"temperature": 0, **options}
-    resp = await client.post(f"{config.ENGINE_URL}/api/generate", json=body)
-    resp.raise_for_status()
-    return resp.json()
 
 
 async def suggest(
@@ -179,9 +151,12 @@ async def suggest(
     if top_tokens is not None:
         tops = await top_tokens(prompt, TOP_N)
     else:
-        client = _shared_client()
-        first = await _generate(client, model, prompt, num_predict=1, top_logprobs=TOP_N)
-        tops = first.get("logprobs", [{}])[0].get("top_logprobs", [])
+        from .engine import Engine
+        engine = Engine()
+        try:
+            tops = await engine.kv_top_tokens(prompt, TOP_N, model=model)
+        finally:
+            await engine.aclose()
 
     result, seen = [], set()
     for t in tops:

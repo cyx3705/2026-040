@@ -1,11 +1,13 @@
-"""DEBUG-001/002：调试参数校验与保存，安全重启私有引擎，并发切换的失败恢复。"""
+"""EXT-001～004: external-service API, settings and learning boundaries."""
 
 import asyncio
 import hashlib
 import importlib
+import json
 import re
 import tempfile
 import unittest
+from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
@@ -77,97 +79,6 @@ class KVForkContractTests(unittest.IsolatedAsyncioTestCase):
             await RemoteKVBackend(None).fork_at(SequenceHandle("a", "e", 1), 1)
 
 
-class NativeKernelTests(unittest.TestCase):
-    def test_input_dll_lifecycle_without_an_active_focus_lease(self):
-        from echo_app.input_bridge import InputBridge
-        bridge = InputBridge()
-        try:
-            bridge._start()
-            self.assertFalse(bridge.refresh(999999)["active"])
-            bridge.release(999999)  # Stale handles cannot acquire focus or change layouts.
-        finally:
-            bridge.close()
-            bridge.close()
-
-    def test_cpp_runtime_contract_without_gpu(self):
-        # These invariants now execute inside the production C++ Runtime with
-        # an injected llama ABI, replacing mocks of removed Python internals.
-        import subprocess
-        from echo_app.kernel_build import ensure_built
-        executable = ensure_built().with_name("kernel_tests.exe")
-        result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=60)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(result.stdout.count("PASS "), 15, result.stdout)
-        policy = subprocess.run([str(executable.with_name("input_tests.exe"))], capture_output=True, text=True, timeout=60)
-        self.assertEqual(policy.returncode, 0, policy.stdout + policy.stderr)
-
-
-class EngineParallelTests(unittest.IsolatedAsyncioTestCase):
-    async def test_start_rejects_legacy_python_kernel(self):
-        engine = Engine()
-        with patch.object(config, "KV_ADAPTER_URL", "http://native"), \
-                patch.object(engine.kv, "runtime_info", new=AsyncMock(return_value={
-                    "shared_chat": True, "top_tokens": True, "model": "m"})), \
-                patch.object(engine, "unload", new_callable=AsyncMock) as unload:
-            with self.assertRaisesRegex(RuntimeError, "旧版 Python 内核"):
-                await engine.start_kv("m")
-        unload.assert_not_awaited()
-
-    async def test_native_parallel_changes_scheduling_without_loading_second_model(self):
-        engine = Engine()
-        with patch.object(config, "KV_ADAPTER_URL", "http://native"), \
-                patch.object(engine.kv, "runtime_info", new=AsyncMock(return_value={"shared_chat": True, "model": "m"})), \
-                patch.object(engine, "load", new_callable=AsyncMock) as load, \
-                patch.object(engine, "stop") as stop:
-            await engine.set_parallel(2, "m")
-        self.assertEqual(engine.parallel, 2)
-        load.assert_not_awaited()
-        stop.assert_not_called()
-
-    async def test_capability_rejects_different_runtime_model(self):
-        engine = Engine()
-        with patch.object(engine.kv, "runtime_info", new=AsyncMock(return_value={"shared_chat": True, "top_tokens": True, "model": "wrong"})), \
-                patch.object(engine.kv, "capabilities", new=AsyncMock(return_value=KVCapabilities("native", True, True, True, True, True))):
-            result = await engine.kv_capabilities("requested")
-        self.assertFalse(result.supported)
-        self.assertEqual(result.reason, "model_mismatch")
-
-    async def test_change_restarts_and_reloads_current_model(self):
-        engine = Engine()
-        engine._proc = Mock()
-        engine._proc.poll.return_value = None
-        with patch.object(config, "KV_ADAPTER_URL", None), \
-                patch.object(engine, "running", return_value=True), \
-                patch.object(engine, "start") as start, patch.object(engine, "stop") as stop, \
-                patch.object(engine, "load", new_callable=AsyncMock) as load:
-            await engine.set_parallel(2, "gemma4:12b")
-            self.assertEqual(engine.parallel, 2)
-            start.assert_called_once()
-            stop.assert_called_once()
-            load.assert_awaited_once_with("gemma4:12b")
-
-    async def test_failed_load_restores_previous_slots_and_model(self):
-        engine = Engine()
-        engine._proc = Mock()
-        engine._proc.poll.return_value = None
-        with patch.object(config, "KV_ADAPTER_URL", None), \
-                patch.object(engine, "running", return_value=True), patch.object(engine, "start"), \
-                patch.object(engine, "stop"), \
-                patch.object(engine, "load", new=AsyncMock(side_effect=[RuntimeError("load failed"), None])) as load:
-            with self.assertRaisesRegex(RuntimeError, "load failed"):
-                await engine.set_parallel(2, "gemma4:12b")
-            self.assertEqual(engine.parallel, 1)
-            self.assertEqual(load.await_count, 2)
-
-    async def test_does_not_stop_an_engine_owned_by_another_process(self):
-        engine = Engine()
-        with patch.object(config, "KV_ADAPTER_URL", None), \
-                patch.object(engine, "running", return_value=True), patch.object(engine, "stop") as stop:
-            with self.assertRaises(RuntimeError):
-                await engine.set_parallel(2, "qwen3:8b")
-            stop.assert_not_called()
-
-
 class DebugApiTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
@@ -184,6 +95,18 @@ class DebugApiTests(unittest.IsolatedAsyncioTestCase):
         cls.temp.cleanup()
 
     async def asyncSetUp(self):
+        # These are generic external-service tests. Native capability discovery
+        # and handle ownership have their own hermetic transport tests.
+        probe = patch.object(self.server, "shared_available", new=AsyncMock(return_value=None))
+        probe.start()
+        self.addCleanup(probe.stop)
+        management = patch.object(self.server.engine, 'model_switch', new=AsyncMock(return_value=None))
+        management.start()
+        self.addCleanup(management.stop)
+        catalog = patch.object(self.server.engine, 'model_catalog', side_effect=lambda: {
+            'managed':False,'models':[{**m,'installed':True,'supported':True} for m in self.server.engine.models()]})
+        catalog.start()
+        self.addCleanup(catalog.stop)
         self.server.engine.parallel = 1
         self.server.store.set_setting("suggest_candidates", "5")
         self.server.store.set_setting("engine_parallel", "1")
@@ -229,7 +152,7 @@ class DebugApiTests(unittest.IsolatedAsyncioTestCase):
         dictionary.lemma.return_value = "bank"
         with patch.object(self.server, "dictionary", dictionary), \
                 patch.object(self.server, "model_family", return_value="qwen3"), \
-                patch.object(self.server.engine, "kv_create_sequence", new_callable=AsyncMock) as create:
+                patch.object(self.server.engine, "ask", new_callable=AsyncMock) as create:
             response = await self.client.post("/api/reader/gloss", json={"text": "bank"})
             self.assertEqual(response.status_code, 200)
             self.assertIn('"state": "skipped_learned"', response.text)
@@ -358,52 +281,11 @@ class DebugApiTests(unittest.IsolatedAsyncioTestCase):
         lookup.assert_not_called()
         senses.assert_not_called()
 
-    async def test_native_stream_glosses_before_text_done_persists_and_releases(self):
-        import json
-        sequence = SequenceHandle("a-unique", "e", 100)
-        self.server.engine.parallel = 2
-
-        async def chat(*args, on_sequence, **kwargs):
-            on_sequence(sequence)
-            for piece in ("A river bank ", "is peaceful. ", "Do you agree?"):
-                yield piece
-                await asyncio.sleep(0.02)
-
-        async def prefix(seq, text):
-            self.assertEqual(seq, sequence)
-            if text.endswith("bank"):
-                self.assertEqual(text, "A river bank")
-            return 102, ""
-
-        with patch.object(self.server.engine, "chat", side_effect=chat), \
-                patch.object(self.server.engine, "kv_capabilities", new=AsyncMock(
-                    return_value=KVCapabilities("native", True, True, True, True, True))), \
-                patch.object(self.server, "model_family", return_value="gemma4"), \
-                patch.object(self.server.engine, "kv_prefix_for_text", side_effect=prefix), \
-                patch.object(self.server.engine, "kv_tokenize", new=AsyncMock(return_value=[1])), \
-                patch.object(self.server.engine, "fork_at", new=AsyncMock(return_value=BranchHandle("b", "a", "e"))), \
-                patch.object(self.server.engine, "decode_label", new=AsyncMock(
-                    side_effect=lambda branch, suffix, labels, budget: labels[1])), \
-                patch.object(self.server.engine, "release_branch", new=AsyncMock()) as release_b, \
-                patch.object(self.server.engine, "kv_release_sequence", new=AsyncMock()) as release_a:
-            response = await self.client.post("/api/chat", json={"messages": [{"role": "user", "content": "river"}]})
-        events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
-        self.assertFalse(any("error" in event for event in events), events)
-        text_done = next(i for i, event in enumerate(events) if event.get("text_done"))
-        self.assertTrue(any(event.get("gloss") for event in events[:text_done]))
-        done = next(event for event in events if event.get("done"))
-        stored = self.server.store.get(done["conversation_id"])["messages"][-1]
-        self.assertEqual(stored["glosses"], done["glosses"])
-        release_a.assert_awaited_once_with(sequence)
-        self.assertGreater(release_b.await_count, 0)
-
-    async def test_history_default_never_creates_a_or_requests_model(self):
-        with patch.object(self.server.engine, "ask", new_callable=AsyncMock) as ask, \
-                patch.object(self.server.engine, "kv_create_sequence", new_callable=AsyncMock) as create:
+    async def test_history_default_never_requests_model(self):
+        with patch.object(self.server.engine, "ask", new_callable=AsyncMock) as ask:
             response = await self.client.post("/api/gloss", json={"text": "bank", "default_only": True})
         self.assertEqual(response.json()[0]["fallback_reason"], "legacy_default")
         ask.assert_not_awaited()
-        create.assert_not_awaited()
 
     async def test_css_update_changes_asset_url_without_editing_html(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -439,41 +321,82 @@ class DebugApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code, 422)
             change.assert_not_awaited()
 
-    async def test_input_translation_selects_one_label_and_always_releases(self):
-        sequence = SequenceHandle("translate", "epoch", 80)
-        branch = BranchHandle("choice", "translate", "epoch")
+    async def test_input_translation_structured_selection_failure_and_abstention(self):
         with patch.object(self.server.dictionary, "english_choices", return_value=("learn", "study")), \
-                patch.object(self.server.engine, "kv_capabilities", new=AsyncMock(return_value=
-                    KVCapabilities("native", True, True, True, True, True))), \
-                patch.object(self.server, "model_family", return_value="qwen3"), \
-                patch.object(self.server.engine, "kv_create_sequence", new=AsyncMock(return_value=sequence)) as create, \
-                patch.object(self.server.engine, "fork_at", new=AsyncMock(return_value=branch)), \
-                patch.object(self.server.engine, "kv_tokenize", new=AsyncMock(return_value=[1, 2])), \
-                patch.object(self.server.engine, "decode_label", new=AsyncMock(side_effect=[" B", "0", RuntimeError("fail")])) as select, \
-                patch.object(self.server.engine, "release_branch", new=AsyncMock()) as release_b, \
-                patch.object(self.server.engine, "kv_release_sequence", new=AsyncMock()) as release_a, \
-                patch.object(self.server.engine, "ask", new=AsyncMock()) as ask:
+                patch.object(self.server.engine, "ask", new=AsyncMock(side_effect=[
+                    '{"label":"B"}', '{"label":"0"}', RuntimeError("fail")])) as ask:
             payload = {"messages": [], "chinese": "学习", "before": "I ", "after": " English"}
             first = await self.client.post("/api/input-translation", json=payload)
             self.assertEqual(first.json(), {"word": "study", "reason": None})
-            self.assertIn('"before": "I "', create.call_args.args[1])
-            self.assertEqual(select.call_args.args[2], ["0", " A", " B"])
-            self.assertEqual(select.call_args.kwargs, {"budget": 1})
-            abstain = await self.client.post("/api/input-translation", json=payload)
-            self.assertEqual(abstain.json()["reason"], "unresolved")
-            failed = await self.client.post("/api/input-translation", json=payload)
-            self.assertEqual(failed.json()["reason"], "selector_failure")
-            self.assertEqual(release_a.await_count, 3)
-            self.assertEqual(release_b.await_count, 3)
-            ask.assert_not_awaited()
+            self.assertIn('"before": "I "', ask.call_args.args[1])
+            self.assertEqual(ask.call_args.kwargs["format_schema"]["properties"]["label"]["enum"], ["0", "A", "B"])
+            self.assertEqual((await self.client.post("/api/input-translation", json=payload)).json()["reason"], "unresolved")
+            self.assertEqual((await self.client.post("/api/input-translation", json=payload)).json()["reason"], "selector_failure")
 
     async def test_input_translation_missing_choices_never_runs_model(self):
         with patch.object(self.server.dictionary, "english_choices", return_value=()), \
-                patch.object(self.server.engine, "kv_create_sequence", new=AsyncMock()) as create:
+                patch.object(self.server.engine, "ask", new_callable=AsyncMock) as ask:
             for term, reason in [("不存在的词", "no_dictionary_choices"), ("hello", "chinese_word_required")]:
                 response = await self.client.post("/api/input-translation", json={"messages": [], "chinese": term})
                 self.assertEqual(response.json(), {"word": None, "reason": reason})
-            create.assert_not_awaited()
+            ask.assert_not_awaited()
+
+    async def test_shared_chat_sense_uses_only_actual_left_prefix(self):
+        shared = Mock()
+        shared.select_text = AsyncMock(return_value=[{'label':' A','decision_steps':1,
+            'shared_prefix_tokens':10,'replayed_tokens':2}])
+        sequence = SequenceHandle('a','epoch',20)
+        with patch.object(self.server.dictionary,'learned_lemmas',return_value=set()), \
+                patch.object(self.server.dictionary,'lemma',side_effect=str.lower), \
+                patch.object(self.server.dictionary,'lookup',return_value={'lemma':'bank','gloss':'银行'}), \
+                patch.object(self.server.dictionary,'senses',return_value=[{'pos':'n','text':'银行'},{'pos':'n','text':'岸'}]):
+            result=await self.server.resolve_glosses('bank FUTURE_SECRET', [], shared=shared,
+                sequence=sequence, source_prompt='PROMPT:',template='chatml')
+        self.assertEqual(shared.select_text.call_args_list[0].args[:2], (sequence,'PROMPT:bank'))
+        self.assertNotIn('FUTURE_SECRET', shared.select_text.call_args_list[0].args[2])
+        self.assertEqual(result[0]['decision_steps'],1)
+        self.assertEqual(result[0]['shared_prefix_tokens'],10)
+
+    async def test_shared_chat_glosses_each_completed_word_before_next_stream_event(self):
+        class FakeShared:
+            def __init__(self):
+                self.selected = 0
+
+            @asynccontextmanager
+            async def sequence(self, model, prompt):
+                yield SequenceHandle('a', 'epoch', 12)
+
+            async def chat(self, sequence):
+                yield 'bank '
+
+            async def prefix(self, sequence, text):
+                return 16, ''
+
+            async def tokenize(self, text):
+                return [7, 8]
+
+            async def select(self, sequence, jobs):
+                self.selected += len(jobs)
+                return [{'label': ' A', 'decision_steps': 1,
+                         'shared_prefix_tokens': 14, 'replayed_tokens': 2}]
+
+        shared = FakeShared()
+        with patch.object(self.server, 'shared_available', new=AsyncMock(return_value=shared)), \
+                patch.object(self.server, 'model_family', return_value='qwen'), \
+                patch.object(self.server.dictionary, 'learned_lemmas', return_value=set()), \
+                patch.object(self.server.dictionary, 'lemma', side_effect=str.lower), \
+                patch.object(self.server.dictionary, 'lookup', return_value={'lemma':'bank','gloss':'银行'}), \
+                patch.object(self.server.dictionary, 'senses', return_value=[
+                    {'pos':'n','text':'银行'}, {'pos':'n','text':'岸'}]):
+            response = await self.client.post('/api/chat', json={
+                'messages':[{'role':'user','content':'Say one word.'}]})
+        events = [json.loads(line[6:]) for line in response.text.splitlines()
+                  if line.startswith('data: ')]
+        gloss_index = next(i for i, event in enumerate(events) if event.get('gloss'))
+        text_done_index = next(i for i, event in enumerate(events) if event.get('text_done'))
+        self.assertLess(gloss_index, text_done_index)
+        self.assertEqual(shared.selected, 1)
+        self.assertEqual(next(event for event in events if event.get('done'))['glosses'][0]['gloss'], '银行')
 
     async def test_failed_change_does_not_save_unapplied_settings(self):
         with patch.object(self.server.engine, "set_parallel", new=AsyncMock(side_effect=RuntimeError("failed"))):
@@ -502,13 +425,165 @@ class DebugApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await request).status_code, 200)
             change.assert_awaited_once()
 
-    async def test_saved_parallel_is_restored_on_startup(self):
+    async def test_saved_parallel_is_restored_without_starting_provider(self):
         self.server.store.set_setting("engine_parallel", "2")
-        with patch.object(Engine, "installed", new_callable=PropertyMock, return_value=True), \
-                patch.object(self.server.engine, "start") as start, patch.object(self.server.engine, "stop"), \
-                patch.object(self.server.engine, "start_kv", new=AsyncMock()) as start_kv, \
-                patch.object(self.server.engine, "_stop_kv"):
+        with patch.object(self.server.engine, "models", return_value=[{"name": "external"}]), \
+                patch.object(self.server.engine, "aclose", new_callable=AsyncMock) as close:
             async with self.server.lifespan(self.server.app):
                 self.assertEqual(self.server.engine.parallel, 2)
-                start.assert_called_once()
-                start_kv.assert_awaited_once_with(self.server.current_model())
+            close.assert_awaited_once()
+
+    async def test_external_chat_and_reader_use_real_transport_without_provider_management(self):
+        import json
+        requests = []
+        def respond(request):
+            requests.append(request)
+            body = json.loads(request.content)
+            if request.url.path == '/v1/kv/op':
+                return httpx.Response(404, json={'error':{'message':'not supported'}})
+            if body.get("stream"):
+                return httpx.Response(200, text='data: {"choices":[{"delta":{"content":"bank"}}]}\n\ndata: [DONE]\n\n')
+            keys = body['response_format']['json_schema']['schema']['properties']
+            return httpx.Response(200, json={'choices':[{'finish_reason':'stop',
+                'message':{'content':json.dumps({key:'B' for key in keys})}}]})
+        real_client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+        with patch.object(self.server.engine, '_client', real_client), \
+                patch.object(self.server.dictionary, 'learned_lemmas', return_value=set()), \
+                patch.object(self.server.dictionary, 'lemma', side_effect=str.lower), \
+                patch.object(self.server.dictionary, 'lookup', return_value={'lemma':'bank','gloss':'银行'}), \
+                patch.object(self.server.dictionary, 'senses', return_value=[{'pos':'n','text':'银行'},{'pos':'n','text':'岸'}]), \
+                patch.object(self.server, 'model_family', return_value='qwen'):
+            response = await self.client.post('/api/chat', json={'messages':[{'role':'user','content':'river'}]})
+            events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
+            self.assertFalse(any('error' in item for item in events), events)
+            done = next(item for item in events if item.get('done'))
+            self.assertEqual(done['glosses'][0]['gloss'], '岸')
+            self.assertEqual(self.server.store.get(done['conversation_id'])['messages'][-1]['glosses'],done['glosses'])
+            result = await self.client.post('/api/reader/gloss',json={'text':'bank'})
+            self.assertIn('岸',result.text)
+            self.assertIn('"done": true',result.text)
+        await real_client.aclose()
+        inference = [r for r in requests if r.url.path == '/v1/chat/completions']
+        self.assertEqual(len(inference),3)
+        self.assertTrue(all(r.url.path in ('/v1/chat/completions','/v1/kv/op') for r in requests))
+
+    async def test_external_truncated_chat_never_saves_partial_reply(self):
+        def respond(_):
+            return httpx.Response(200,text='data: {"choices":[{"delta":{"content":"partial"}}]}\n\n')
+        real_client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+        with patch.object(self.server.engine,'_client',real_client), \
+                patch.object(self.server.store,'save') as save:
+            response=await self.client.post('/api/chat',json={'messages':[{'role':'user','content':'Hi'}]})
+        self.assertIn('error',response.text)
+        self.assertNotIn('"done": true',response.text)
+        save.assert_not_called()
+        await real_client.aclose()
+
+    async def test_model_selection_only_accepts_inventory_and_stale_native_handles_are_rejected(self):
+        with patch.object(self.server.engine,'models',return_value=[{'name':'external','family':'qwen','size':0}]):
+            self.assertEqual((await self.client.post('/api/model',json={'name':'external'})).status_code,200)
+            self.assertEqual(self.server.current_model(),'external')
+            self.assertEqual((await self.client.post('/api/model',json={'name':'missing'})).status_code,404)
+        self.assertEqual((await self.client.post('/api/gloss',json={
+            'text':'bank','sequence_id':'old','cache_epoch':'old','prefix_tokens':1})).status_code,422)
+
+    async def test_unknown_model_template_disables_only_prediction(self):
+        with patch.object(self.server,'model_family',return_value='unknown'), \
+                patch.object(self.server.engine,'kv_top_tokens',new_callable=AsyncMock) as predict:
+            result=await self.client.post('/api/suggest',json={'messages':[],'text':'I '})
+            self.assertEqual(result.status_code,503)
+            predict.assert_not_awaited()
+
+    async def test_suggest_deadline_cancels_inference_and_releases_admission(self):
+        cancelled = asyncio.Event()
+        async def blocked(*args, **kwargs):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        with patch.object(self.server, 'SUGGEST_TIMEOUT', 0.03), \
+                patch.object(self.server, 'model_family', return_value='qwen3'), \
+                patch.object(self.server.predict, 'suggest', side_effect=blocked):
+            response = await self.client.post('/api/suggest', json={'messages':[], 'text':'I '})
+        self.assertEqual(response.status_code, 504)
+        self.assertIn('超时', response.json()['detail'])
+        self.assertTrue(cancelled.is_set())
+        self.assertFalse(self.server._sequence_slot.locked())
+        self.assertTrue(self.server._engine_idle.is_set())
+
+    async def test_suggest_deadline_includes_waiting_for_local_sequence(self):
+        async with self.server._sequence_slot:
+            with patch.object(self.server, 'SUGGEST_TIMEOUT', 0.02), \
+                    patch.object(self.server.predict, 'suggest', new_callable=AsyncMock) as predict:
+                response = await self.client.post('/api/suggest', json={'messages':[], 'text':'I '})
+                self.assertEqual(response.status_code, 504)
+                predict.assert_not_awaited()
+        self.assertTrue(self.server._engine_idle.is_set())
+
+    async def test_suggest_disconnect_cancels_work_and_next_request_recovers(self):
+        started, cancelled = asyncio.Event(), asyncio.Event()
+        async def blocked(*args, **kwargs):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        async def disconnected():
+            await started.wait()
+            return True
+        request = Mock()
+        request.is_disconnected = disconnected
+        with patch.object(self.server, 'model_family', return_value='qwen3'), \
+                patch.object(self.server.predict, 'suggest', side_effect=blocked):
+            with self.assertRaises(self.server.HTTPException) as error:
+                await self.server.suggest(self.server.SuggestRequest(messages=[], text='I '), request)
+        self.assertEqual(error.exception.status_code, 499)
+        self.assertTrue(cancelled.is_set())
+        self.assertFalse(self.server._sequence_slot.locked())
+        self.assertTrue(self.server._engine_idle.is_set())
+        with patch.object(self.server, 'model_family', return_value='qwen3'), \
+                patch.object(self.server.predict, 'suggest', new=AsyncMock(return_value=[])):
+            self.assertEqual((await self.client.post('/api/suggest', json={'messages':[], 'text':'I '})).json(), [])
+
+    async def test_suggest_provider_error_is_an_actionable_response(self):
+        with patch.object(self.server, 'model_family', return_value='qwen3'), \
+                patch.object(self.server.predict, 'suggest', side_effect=httpx.ReadTimeout('busy')):
+            response = await self.client.post('/api/suggest', json={'messages':[], 'text':'I '})
+        self.assertEqual(response.status_code, 504)
+        self.assertIn('重试', response.json()['detail'])
+
+    async def test_managed_selection_saves_only_after_provider_success(self):
+        previous = self.server.current_model()
+        catalog = {'managed':True,'models':[{'name':'new','supported':True},
+            {'name':'partial','supported':False,'reason':'未下载完整'}]}
+        with patch.object(self.server.engine,'model_catalog',return_value=catalog), \
+                patch.object(self.server.engine,'select_external_model',new_callable=AsyncMock) as select:
+            self.assertTrue((await self.client.get('/api/models')).json()['managed'])
+            self.assertEqual((await self.client.post('/api/model',json={'name':'partial'})).status_code,422)
+            select.assert_not_awaited()
+            select.side_effect = RuntimeError('加载失败；已恢复原模型')
+            failed = await self.client.post('/api/model',json={'name':'new'})
+            self.assertEqual(failed.status_code,503)
+            self.assertEqual(self.server.current_model(),previous)
+            select.side_effect = None
+            self.server.engine._ranking = ('stale',[])
+            self.assertEqual((await self.client.post('/api/model',json={'name':'new'})).status_code,200)
+            self.assertEqual(self.server.current_model(),'new')
+            self.assertIsNone(self.server.engine._ranking)
+        self.server.store.set_setting('model',previous)
+
+    async def test_model_family_remains_available_during_provider_reload(self):
+        with patch.dict(self.server._families,clear=True), \
+                patch.object(self.server.engine,'models',side_effect=httpx.ConnectError('loading')), \
+                patch.object(self.server.engine,'model_catalog',return_value={
+                    'managed':True,'models':[{'name':'new','family':'gemma4'}]}):
+            self.assertEqual(self.server.model_family('new'),'gemma4')
+
+    async def test_explicit_model_applies_even_when_provider_is_offline(self):
+        import os
+        with patch.dict(os.environ,{'ECHO_MODEL':'explicit-model'}), \
+                patch.object(config,'MODEL','explicit-model'), \
+                patch.object(self.server.engine,'models',side_effect=httpx.ConnectError('offline')), \
+                patch.object(self.server.engine,'aclose',new_callable=AsyncMock):
+            async with self.server.lifespan(self.server.app):
+                self.assertEqual(self.server.current_model(),'explicit-model')

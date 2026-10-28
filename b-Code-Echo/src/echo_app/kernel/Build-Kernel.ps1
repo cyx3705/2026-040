@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$OutputDirectory)
+param([Parameter(Mandatory=$true)][string]$OutputDirectory, [switch]$InputOnly)
 $ErrorActionPreference = 'Stop'
 $source = $PSScriptRoot
 $out = [IO.Path]::GetFullPath($OutputDirectory)
@@ -22,16 +22,22 @@ if (-not $vcvars -or -not (Test-Path -LiteralPath $vcvars)) {
 }
 # Keep all compiler/linker outputs outside the source checkout. /MT needs no VC runtime installation.
 $batchFile = Join-Path $out 'build.cmd'
+$inferenceBuild = ''
+if (-not $InputOnly) {
+    $inferenceBuild = @"
+cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /LD "$source\echo_kernel.cpp" /Fe:echo_kernel.dll /link /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 "$source\kernel_tests.cpp" /Fe:kernel_tests.exe /link /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+"@
+}
 $batchText = @"
 @echo off
 chcp 65001 >nul
 call "$vcvars" >nul
 if errorlevel 1 exit /b 1
 cd /d "$out"
-cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /LD "$source\echo_kernel.cpp" /Fe:echo_kernel.dll /link /INCREMENTAL:NO
-if errorlevel 1 exit /b 1
-cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 "$source\kernel_tests.cpp" /Fe:kernel_tests.exe /link /INCREMENTAL:NO
-if errorlevel 1 exit /b 1
+$inferenceBuild
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /LD "$source\input_bridge.cpp" /Fe:input_bridge.dll /link /INCREMENTAL:NO user32.lib imm32.lib gdi32.lib
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 "$source\input_tests.cpp" /Fe:input_tests.exe /link /INCREMENTAL:NO user32.lib imm32.lib gdi32.lib

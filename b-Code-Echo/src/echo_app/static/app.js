@@ -7,6 +7,8 @@ let convId = null;  // 当前对话在历史里的编号；新对话第一轮说
 let busy = false;
 let ready = false;
 let switching = false;  // 正在换模型
+let modelSwitchRequest = false;
+let engineCheckTimer = 0;
 let inputMode = null;
 let inputTranslation = null;
 let debugSettings = { candidates: 5, parallel: 1, max_candidates: 20 };
@@ -47,13 +49,19 @@ function makeEmpty() {
 
 // 引擎状态
 async function checkEngine() {
+  clearTimeout(engineCheckTimer);
   const el = $("engine");
   try {
     const s = await (await fetch("/api/status")).json();
     ready = s.state === "ready";
-    el.dataset.state = ready ? "ready" : "error";
-    $("engine-text").textContent = ready ? "本地引擎就绪" : s.detail;
-    if (s.model) $("model-note").textContent = `${s.model} · 本地运行`;
+    switching = modelSwitchRequest || s.state === "switching";
+    el.dataset.state = switching ? "checking" : ready ? "ready" : "error";
+    const phase = {waiting:"等待现有请求结束",saving:"保存模型缓存",stopping:"释放原模型",
+      loading:"加载新模型",restoring:"恢复模型缓存",rollback:"恢复原模型"};
+    $("engine-text").textContent = s.model_switch ? (phase[s.model_switch.phase] || "正在更换模型") :
+      switching ? "正在更换模型" : ready ? "外部推理服务就绪" : s.detail;
+    if (s.model_switch?.target) $("model-note").textContent = s.model_switch.target;
+    else if (s.model && !modelSwitchRequest) $("model-note").textContent = s.model;
     if (s.levels) renderLevels(s.levels);
     if (s.lengths) renderLengths(s.lengths);
     if (s.debug) showDebug(s.debug);
@@ -64,8 +72,9 @@ async function checkEngine() {
   }
   updateSend();
   setControls();
-  if (ready) scheduleSuggest();
-  else setTimeout(checkEngine, 3000);
+  if (switching) engineCheckTimer = setTimeout(checkEngine, 1000);
+  else if (ready) scheduleSuggest();
+  else engineCheckTimer = setTimeout(checkEngine, 3000);
 }
 
 function updateSend() { send.disabled = busy || switching || !ready || inputTranslation?.pending || !input.value.trim(); }
@@ -238,6 +247,8 @@ let suggestSeq = 0;
 let suggestInFlight = false;
 let suggestPending = false;
 let suggestScheduledAt = 0;
+let suggestState = "idle";
+let suggestError = "";
 const PARTIAL = /[A-Za-z']+$/;
 
 function scheduleSuggest() {
@@ -264,29 +275,51 @@ async function fetchSuggest() {
   }
   suggestInFlight = true;
   suggestPending = false;
+  suggestState = "loading";
+  suggestError = "";
   const text = input.value;
   const seq = ++suggestSeq;
   const requestedAt = performance.now();
   const started = suggestScheduledAt || requestedAt;
   suggestScheduledAt = 0;
   $("suggest").classList.add("loading");
+  if (!suggestions.length) renderSuggest();
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 50000);
+  const slow = setTimeout(() => {
+    if (seq !== suggestSeq) return;
+    suggestState = "slow";
+    $("debug-status").textContent = "等待推理服务…";
+    if (!suggestions.length) renderSuggest();
+  }, 1500);
   try {
     const resp = await fetch("/api/suggest", {
       method: "POST",
+      signal: controller.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: history, text, level, length: replyLength, practice: plan, candidates: debugSettings.candidates }),
     });
     const items = await resp.json();
+    if (!resp.ok) throw new Error(typeof items.detail === "string" ? items.detail : "预测失败，请重试");
+    if (!Array.isArray(items)) throw new Error("预测返回格式异常，请重试");
     if (seq !== suggestSeq || input.value !== text || busy || switching || inputMode?.chinese || inputMode?.composing || inputTranslation?.pending || inputTranslation?.awaitingBoundary) return;
-    suggestions = Array.isArray(items) ? items : [];
+    suggestions = items;
+    suggestState = items.length ? "ready" : "empty";
     suggestionsFor = text;
     $("debug-status").textContent = `${suggestions.length} 项 · ${Math.round(performance.now() - started)}ms`;
     $("debug-status").title = `请求 ${Math.round(performance.now() - requestedAt)}ms；显示耗时包含输入等待`;
     sel = 0;
     renderSuggest();
   } catch (e) {
-    if (seq === suggestSeq) hideSuggest();
+    if (seq === suggestSeq && !busy && !switching) {
+      suggestState = "error";
+      suggestError = e.name === "AbortError" ? "预测等待超时，请重试" : e.message;
+      $("debug-status").textContent = "预测失败";
+      hideSuggest();
+    }
   } finally {
+    clearTimeout(deadline);
+    clearTimeout(slow);
     suggestInFlight = false;
     $("suggest").classList.remove("loading");
     if (suggestPending) fetchSuggest();  // 当前请求结束后，只预测最新输入。
@@ -304,8 +337,17 @@ function renderSuggest() {
   if (!suggestions.length) {
     const note = document.createElement("li");
     note.className = "suggest-empty";
-    note.setAttribute("aria-hidden", "true");
-    note.textContent = inputMode?.chinese ? "中文输入中…" : switching ? "正在换模型…" : busy ? "AI 正在说…" : ready ? "预测下一个词…" : "引擎还没就绪";
+    note.setAttribute("role", "status");
+    note.textContent = inputMode?.chinese ? "中文输入中…" : switching ? "正在换模型…" : busy ? "AI 正在说…" : !ready ? "引擎还没就绪" :
+      suggestState === "error" ? suggestError : suggestState === "slow" ? "预测耗时较长，正在等待推理服务…" :
+      suggestState === "loading" ? "预测下一个词…" : suggestState === "empty" ? "暂无候选，继续输入可重新预测" : "输入英文后预测下一个词";
+    if (ready && !busy && !switching && !inputMode?.chinese && suggestState === "error") {
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.textContent = "重试";
+      retry.addEventListener("click", () => { input.focus(); scheduleSuggest(); });
+      note.append(" ", retry);
+    }
     list.replaceChildren(note);
     return;
   }
@@ -717,7 +759,7 @@ async function changeDebug() {
   hideSuggest();
   setControls();
   updateSend();
-  $("debug-status").textContent = requested.parallel === debugSettings.parallel ? "保存中…" : "重载模型…";
+  $("debug-status").textContent = requested.parallel === debugSettings.parallel ? "保存中…" : "保存中…";
   let error = "";
   try {
     const resp = await fetch("/api/debug", {
@@ -756,7 +798,17 @@ function closeModelMenu() {
 
 async function openModelMenu() {
   let data;
-  try { data = await (await fetch("/api/models")).json(); } catch (e) { return; }
+  modelMenu.hidden = false;
+  modelBtn.setAttribute("aria-expanded", "true");
+  modelMenu.textContent = "读取模型列表…";
+  try {
+    const response = await fetch("/api/models");
+    data = await response.json();
+    if (!response.ok || !Array.isArray(data.models)) throw new Error(data.detail || "无法读取模型列表");
+  } catch (e) {
+    modelMenu.textContent = `模型列表读取失败：${e.message}。关闭后可重试。`;
+    return;
+  }
   const gb = (n) => (n / 2 ** 30).toFixed(1) + " GB";
   const items = data.models.map((m) => {
     const b = document.createElement("button");
@@ -765,29 +817,35 @@ async function openModelMenu() {
     b.setAttribute("role", "option");
     b.setAttribute("aria-selected", m.name === data.current ? "true" : "false");
     b.disabled = !m.supported;
-    const note = !m.supported ? "对话模板不认得，没法做输入预测"
-      : m.installed ? "已装进 Echo" : "从本机 Ollama 链接过来，不占额外空间";
+    const note = !m.supported ? m.reason || "暂不可用" : m.name === data.current ? "当前使用" :
+      data.managed ? "已下载 · 点击切换" : "外部服务提供";
     b.innerHTML = '<span class="model-name"></span><span class="model-meta"></span>';
     b.querySelector(".model-name").textContent = m.name;
-    b.querySelector(".model-meta").textContent = `${gb(m.size)} · ${note}`;
+    b.querySelector(".model-meta").textContent = [m.size ? gb(m.size) : "",
+      m.context ? `${Math.round(m.context / 1024)}k 上下文` : "", note].filter(Boolean).join(" · ");
     b.addEventListener("click", () => { closeModelMenu(); if (m.name !== data.current) switchModel(m.name); });
     return b;
   });
   const tip = document.createElement("p");
   tip.className = "model-menu-note";
-  tip.textContent = "同一时间只放一个模型在显存里，换模型要加载几秒到几十秒。";
+  tip.textContent = data.managed ? "将切换共用服务的模型，其他客户端也会受到影响。切换期间暂停推理，失败时恢复原模型。" :
+    "仅选择外部服务提供的模型；加载与资源分配由服务管理。";
+  if (!items.length) tip.textContent = "服务暂无可用模型。";
   modelMenu.replaceChildren(...items, tip);
   modelMenu.hidden = false;
   modelBtn.setAttribute("aria-expanded", "true");
 }
 
 async function switchModel(name) {
+  if (busy || switching) return;
   switching = true;
+  modelSwitchRequest = true;
   setControls(); updateSend(); hideSuggest();
-  $("model-note").textContent = `正在加载 ${name}…`;
+  $("model-note").textContent = `正在选择 ${name}…`;
   $("engine").dataset.state = "checking";
   $("engine-text").textContent = "正在换模型";
   let err = "";
+  engineCheckTimer = setTimeout(checkEngine, 600);
   try {
     const resp = await fetch("/api/model", {
       method: "POST",
@@ -798,6 +856,7 @@ async function switchModel(name) {
   } catch (e) {
     err = e.message;
   }
+  modelSwitchRequest = false;
   switching = false;
   setControls();
   if (err) addMessage("error", `没能换成 ${name}：${err}`);

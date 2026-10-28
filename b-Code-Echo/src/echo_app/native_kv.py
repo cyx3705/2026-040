@@ -237,30 +237,8 @@ def make_app(runtime: NativeKVRuntime, sessions: SessionFiles | None = None) -> 
     return app
 
 
-def main(argv: list[str] | None = None) -> None:
-    import uvicorn
-
-    parser = argparse.ArgumentParser(description="Echo llama.cpp shared-KV adapter")
-    parser.add_argument("--model", default=config.MODEL)
-    parser.add_argument("--port", type=int, default=int(os.environ.get("ECHO_KV_PORT", "11541")))
-    parser.add_argument("--context", type=int, default=4096)
-    parser.add_argument("--gpu-layers", type=int, default=int(os.environ.get("ECHO_KV_GPU_LAYERS", str(config.KV_ADAPTER_GPU_LAYERS))))
-    args = parser.parse_args(argv)
-    model = find_model_blob(args.model)
-    library = config.ENGINE_DIR / "lib" / "ollama" / "libllama.dll"
-    runtime = NativeKVRuntime(model, library, args.context, args.gpu_layers)
-    runtime.model_name = args.model
-    # The bundled llama opens state files with narrow fopen: keep the path ASCII.
-    directory = config.KV_SESSION_DIR
-    sessions = None
-    if str(directory).isascii():
-        directory.mkdir(parents=True, exist_ok=True)
-        sessions = SessionFiles(directory, config.KV_SESSION_BYTES, config.KV_SESSION_FILES)
-    app = make_app(runtime, sessions)
-    try:
-        uvicorn.run(app, host="127.0.0.1", port=args.port)
-    finally:
-        runtime.close()
+def main(argv=None):
+    raise SystemExit("EXT-001: Echo 仅连接外部推理服务，不再启动原生模型适配器。")
 
 
 if __name__ == "__main__":

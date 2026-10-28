@@ -49,6 +49,7 @@ const path = require('node:path');
           start: match.index, end: match.index + match[0].length, word: match[0], lemma: match[0].toLowerCase(),
           gloss: mockLearned.has(match[0].toLowerCase()) ? '' : '默认',
           state: mockLearned.has(match[0].toLowerCase()) ? 'skipped_learned' : 'pending',
+          source: match[0].toLowerCase() === 'doomscrolling' ? 'model' : 'dictionary',
         }));
         const encoder = new TextEncoder();
         return new Response(new ReadableStream({start(controller) {
@@ -56,7 +57,7 @@ const path = require('node:path');
           event({phase: 'dictionary', items});
           for (const item of items.filter(i => i.state !== 'skipped_learned')) {
             event({items: [{...item, state: item.lemma === 'beside' ? 'degraded' : 'normal',
-              gloss: item.lemma === 'bank' ? (text.includes('loan') ? '银行' : '岸') : '词义',
+              gloss: item.lemma === 'doomscrolling' ? '末日刷屏' : item.lemma === 'bank' ? (text.includes('loan') ? '银行' : '岸') : '词义',
               fallback_reason: item.lemma === 'beside' ? 'fixture_failure' : null}]});
           }
           event({done: true}); controller.close();
@@ -176,10 +177,19 @@ const path = require('node:path');
     // Dynamic paragraphs and repeated enable/disable do not recursively annotate.
     await send({type: 'echo-toggle', enabled: true});
     await page.evaluate(() => {
-      const p = document.createElement('p'); p.id = 'dynamic'; p.textContent = 'The bank gave a loan.';
+      const p = document.createElement('p'); p.id = 'dynamic'; p.textContent = 'Doomscrolling. The bank gave a loan.';
       document.body.prepend(p);
     });
     await page.waitForFunction(() => document.querySelector('#dynamic [data-echo-word="bank"] .echo-reader-zh')?.textContent === '银行');
+    const unknown = page.locator('#dynamic [data-echo-word="doomscrolling"]');
+    assert.equal(await unknown.locator('.echo-reader-zh').textContent(), '末日刷屏', 'dictionary miss is filled by the model event');
+    assert((await unknown.getAttribute('title')).includes('模型补译'));
+    const unknownCalls = await worker.evaluate(() => readerTexts.filter(text => text.includes('Doomscrolling')).length);
+    await unknown.click();
+    await page.waitForFunction(() => document.querySelector('#dynamic [data-echo-word="doomscrolling"]').hasAttribute('data-known'));
+    await unknown.click();
+    await page.waitForFunction(() => document.querySelector('#dynamic [data-echo-word="doomscrolling"] .echo-reader-zh')?.textContent === '末日刷屏');
+    assert.equal(await worker.evaluate(() => readerTexts.filter(text => text.includes('Doomscrolling')).length), unknownCalls, 'model glosses also survive marking and restoration');
     assert(await worker.evaluate(() => readerRequests < 35), 'bounded requests, no self-mutation loop');
     await send({type: 'echo-toggle', enabled: false});
     // Exercise the actual settings UI, persisted worker registration and a fresh

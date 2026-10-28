@@ -3,7 +3,8 @@
   if (window.__echoYouTubeBridge) return;
   window.__echoYouTubeBridge = true;
   const nativeFetch = window.fetch;
-  let enabled = false, controller, trackKey = '', lastAttempt = 0;
+  let enabled = false, controller, trackKey = '', lastAttempt = 0, captionTimer;
+  const captionAttempts = new WeakMap();
   // YT-010: SPA navigation can fetch the new video's track before the isolated
   // world sees the new URL. Keep recent tracks by their own v= so a late request
   // still gets them; the native player won't fetch the same track again.
@@ -11,6 +12,43 @@
   const videoId = () => location.pathname === '/watch' ? new URL(location.href).searchParams.get('v') :
     location.pathname.match(/^\/shorts\/([^/]+)/)?.[1];
   const emit = (id, data) => window.postMessage({source: 'echo-youtube-page', videoId: id, ...data}, location.origin);
+  function ensureCaptions() {
+    const id = videoId();
+    if (!enabled || !id) return;
+    try {
+      const player = globalThis.EchoYouTubePlayer.select(id), media = player?.querySelector('video');
+      if (!player || player.matches('.ad-showing,.ad-interrupting')) return;
+      const bounds = player.getBoundingClientRect();
+      if (!location.pathname.startsWith('/shorts/') && bounds.height <= bounds.width &&
+          !(media?.videoHeight > media?.videoWidth && media.videoWidth > 0)) return;
+      const response = player.getPlayerResponse?.();
+      if (response?.videoDetails?.videoId && response.videoDetails.videoId !== id) return;
+      const button = player.querySelector('.ytp-subtitles-button[aria-pressed]');
+      const isOn = () => {
+        const state = player.isSubtitlesOn?.();
+        return typeof state === 'boolean' ? state : button ? button.getAttribute('aria-pressed') === 'true' : undefined;
+      };
+      const selected = player.getOption?.('captions', 'track');
+      const list = response?.captions?.playerCaptionsTracklistRenderer?.captionTracks ||
+        player.getOption?.('captions', 'tracklist') || [];
+      const english = Array.isArray(list) ? list.filter(track => /^en(?:-|$)/i.test(track.languageCode || '')) : [];
+      const track = english.find(track => track.vssId === selected?.vssId) || english.find(track => track.kind !== 'asr') || english[0];
+      const on = isOn();
+      if (on === true && (!track || selected?.vssId === track.vssId)) return;
+      if (on === undefined && selected?.languageCode && (!track || selected.vssId === track.vssId)) return;
+      const previous = captionAttempts.get(player);
+      if (previous?.id === id && Date.now() - previous.at < 3000) return;
+      captionAttempts.set(player, {id, at: Date.now()});
+      // Explicitly load/select a track first. Toggle only with confirmed OFF
+      // state, since blindly toggling can turn working subtitles off.
+      player.loadModule?.('captions');
+      if (track) player.setOption?.('captions', 'track', track);
+      if (isOn() === false) {
+        if (typeof player.toggleSubtitles === 'function') player.toggleSubtitles();
+        else if (button?.getAttribute('aria-pressed') === 'false') button.click();
+      }
+    } catch { /* Player API may not be ready; retry without blocking the timeline. */ }
+  }
   function trackURL(value) {
     try {
       const url = new URL(value, location.origin);
@@ -67,10 +105,13 @@
     const id = videoId();
     if (!enabled || !id) return;
     if (tracks.has(id)) { send(id); return; }
-    const player = document.querySelector('#movie_player, .html5-video-player');
+    // The hover preview player can precede the watch player; use the one showing this video.
     let response, selected;
-    try { response = player?.getPlayerResponse?.() || window.ytInitialPlayerResponse;
-      selected = player?.getOption?.('captions', 'track'); } catch { return; }
+    try {
+      const player = globalThis.EchoYouTubePlayer.select(id);
+      response = player?.getPlayerResponse?.() || window.ytInitialPlayerResponse;
+      selected = player?.getOption?.('captions', 'track');
+    } catch { return; }
     // Right after navigation the player can still describe the previous video.
     if (response?.videoDetails?.videoId !== id) return;
     const list = response.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
@@ -97,7 +138,15 @@
   }
   window.addEventListener('message', event => {
     if (event.source !== window || event.origin !== location.origin || event.data?.source !== 'echo-youtube-extension') return;
-    if (event.data.kind === 'stop') { enabled = false; controller?.abort(); trackKey = ''; return; }
-    if (event.data.kind === 'request-timeline') { enabled = true; void request(); }
+    if (event.data.kind === 'stop') {
+      enabled = false; controller?.abort(); trackKey = ''; clearInterval(captionTimer); captionTimer = null; return;
+    }
+    if (event.data.kind === 'request-timeline') {
+      enabled = true; ensureCaptions();
+      // Continue even after a timeline is cached: Shorts may reset CC during
+      // player reuse or switching, without making another timedtext request.
+      if (!captionTimer) captionTimer = setInterval(ensureCaptions, 1000);
+      void request();
+    }
   });
 })();

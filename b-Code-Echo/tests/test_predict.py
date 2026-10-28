@@ -7,6 +7,7 @@ from unittest.mock import patch
 import httpx
 
 from echo_app import predict
+from echo_app.engine import Engine
 from echo_app.dictionary import sense_candidates
 from echo_app.dictionary import Dictionary
 import sqlite3
@@ -35,22 +36,21 @@ class PredictionTests(unittest.IsolatedAsyncioTestCase):
         def respond(request):
             body = json.loads(request.content)
             requests.append(body)
-            return httpx.Response(200, json={"logprobs": [{"top_logprobs": [
+            return httpx.Response(200, json={"completion_probabilities": [{"top_logprobs": [
                 {"token": token, "logprob": -i - 1} for i, token in enumerate(tokens)
             ]}]})
 
         words = {w.lower() for w in known}
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-            with patch.object(predict, "_shared_client", return_value=client):
+            with patch.object(Engine, "client", new=property(lambda self: client)):
                 items = await predict.suggest(
                     "qwen3:8b", "chatml", "Speak English.", [], text,
                     complete=complete, is_word=lambda w: w.lower() in words, k=count,
                 )
         self.assertEqual(len(requests), 1, "筛词或补全不得增加模型请求")
-        self.assertEqual(requests[0]["options"]["num_predict"], 1)
-        self.assertEqual(requests[0]["top_logprobs"], 20)
-        self.assertTrue(requests[0]["logprobs"])
-        self.assertTrue(requests[0]["raw"])
+        self.assertEqual(requests[0]["n_predict"], 1)
+        self.assertEqual(requests[0]["n_probs"], 20)
+        self.assertTrue(requests[0]["cache_prompt"])
         return items, requests[0]
 
     async def test_filters_tokens_and_keeps_five_unique_words_in_model_order(self):

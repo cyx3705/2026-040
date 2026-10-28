@@ -14,7 +14,7 @@ class InputBridge:
     def _start(self):
         if self._dll is not None:
             return
-        dll = C.CDLL(str(ensure_built().with_name("input_bridge.dll")))
+        dll = C.CDLL(str(ensure_built(input_only=True)))
         signatures = {
             "echo_input_error": ([], C.c_char_p),
             "echo_input_create": ([C.POINTER(C.c_void_p)], C.c_int),

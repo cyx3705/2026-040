@@ -293,6 +293,8 @@ kbd {
 .model-btn:hover, .model-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--on-ink) 16%, transparent); }
 .model-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .model-btn:disabled { cursor: default; opacity: .7; }
+.model-btn > span { white-space: nowrap; }
+.model-btn #model-note { max-width: min(250px, 34vw); overflow: hidden; text-overflow: ellipsis; }
 .model-menu {
   position: absolute; z-index: 5; top: calc(100% + 6px); right: 0; width: min(340px, calc(100vw - 32px));
   padding: 6px; display: flex; flex-direction: column; gap: 2px;

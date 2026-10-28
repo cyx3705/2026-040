@@ -9,12 +9,12 @@ async function captionTab() {
 async function ensureCaptions(tab) {
   // The page world can be missing even when the isolated receiver exists.
   // The bridge has its own idempotency guard, so this won't wrap fetch twice.
-  await chrome.scripting.executeScript({target: {tabId: tab.id}, world: 'MAIN', files: ['caption-bridge.js']});
+  await chrome.scripting.executeScript({target: {tabId: tab.id}, world: 'MAIN', files: ['youtube-player.js', 'caption-bridge.js']});
   try {
     const state = await chrome.tabs.sendMessage(tab.id, {type: 'echo-youtube-state'});
     if (state && typeof state.enabled === 'boolean') return;
   } catch { /* Existing tab has no caption receiver yet. */ }
-  await chrome.scripting.executeScript({target: {tabId: tab.id}, files: ['timeline-core.js', 'youtube-content.js']});
+  await chrome.scripting.executeScript({target: {tabId: tab.id}, files: ['youtube-player.js', 'timeline-core.js', 'youtube-content.js']});
 }
 async function preview(retry = false, repair = true) {
   const output = document.getElementById('caption');

@@ -72,6 +72,7 @@ const path = require('node:path');
             start: match.index, end: match.index + match[0].length, word: match[0], lemma: match[0].toLowerCase(),
             gloss: mockLearned.has(match[0].toLowerCase()) ? '' : '默认',
             state: mockLearned.has(match[0].toLowerCase()) ? 'skipped_learned' : 'pending',
+            source: match[0].toLowerCase() === 'doomscrolling' ? 'model' : 'dictionary',
           }));
           const encoder = new TextEncoder(); let timer;
           return new Response(new ReadableStream({start(controller) {
@@ -80,7 +81,7 @@ const path = require('node:path');
             timer = setTimeout(() => {
               for (const item of items.filter(item => item.state !== 'skipped_learned')) event({items: [{...item,
                 state: item.lemma === 'quiet' ? 'degraded' : 'normal',
-                gloss: item.lemma === 'bank' ? (text.includes('loan') ? '银行' : '岸') : '词义',
+                gloss: item.lemma === 'doomscrolling' ? '末日刷屏' : item.lemma === 'bank' ? (text.includes('loan') ? '银行' : '岸') : '词义',
                 fallback_reason: item.lemma === 'quiet' ? 'fixture_failure' : null}]});
               event({done: true}); controller.close();
             }, delay);
@@ -100,7 +101,12 @@ const path = require('node:path');
           body: '<?xml version="1.0"?><timedtext><body><p t="1000" d="3000"><s>XML bank.</s></p></body></timedtext>'});
         // Like the real site, a track URL without a fresh playback token returns an empty body.
         if (url.searchParams.get('v') === 'race' && !url.searchParams.has('pot')) return route.fulfill({contentType: 'application/json', body: ''});
-        const lines = url.searchParams.get('v') === 'race' ? [[1000, 3000, 'Race caption.']] : url.searchParams.get('v') === 'fixture' ?
+        if (['short-a', 'short-b'].includes(url.searchParams.get('v')) && !url.searchParams.has('pot')) {
+          return route.fulfill({contentType: 'application/json', body: ''});
+        }
+        const lines = url.searchParams.get('v') === 'short-a' ? [[1000, 1000, 'Short river bank.'], [2000, 3000, 'Short pending work.']] :
+          url.searchParams.get('v') === 'short-b' ? [[1000, 3000, 'Short bank loan.']] :
+          url.searchParams.get('v') === 'clicked' ? [[1000, 3000, 'Clicked video bank doomscrolling.']] : url.searchParams.get('v') === 'race' ? [[1000, 3000, 'Race caption.']] : url.searchParams.get('v') === 'fixture' ?
           [[1000, 3000, '😀 The river bank is quiet.'], [4000, 3000, 'She went to the bank for a loan.'],
             [10000, 3000, 'A bright light.'], [13000, 3000, 'A bright light.'], [16000, 3000, 'Old pending work.']] :
           [[1000, 3000, 'Next caption.']];
@@ -420,9 +426,138 @@ const path = require('node:path');
       await waitState(value => value.source === 'timeline');
       await clock(1.05);
       await waitState(value => value.caption === 'Race caption.');
+      // YT-011: starting on a list page (no video) and clicking into one must work
+      // without a reload; the hover preview player precedes the watch player.
+      await page.goto('https://www.youtube.com/results?search_query=fixture');
+      await page.evaluate(() => {
+        const watch = document.querySelector('#movie_player'); watch.remove();
+        document.body.insertAdjacentHTML('afterbegin',
+          '<div id="inline-preview-player" class="html5-video-player" style="width:320px;height:180px"><video></video></div><a id="open-video" href="/watch?v=clicked">Open video</a>');
+        document.querySelector('#open-video').onclick = event => {
+          event.preventDefault(); history.pushState({}, '', '/watch?v=clicked');
+          document.body.append(watch); watch.querySelector('video').currentTime = .7;
+        };
+      });
+      await waitState(value => value.enabled && !value.video && !value.error);
+      // WEB-009: migrate a completed old cue that cached dictionary misses.
+      await youtubeWorker.evaluate(() => {
+        const text = 'Clicked video bank doomscrolling.';
+        const items = [...text.matchAll(/[A-Za-z]+/g)].map(match => ({start: match.index, end: match.index + match[0].length,
+          word: match[0], lemma: match[0].toLowerCase(), gloss: match[0] === 'doomscrolling' ? '' : '岸',
+          state: match[0] === 'doomscrolling' ? 'missing' : 'normal'}));
+        return chrome.storage.local.set({'echoYouTubeGlosses:clicked': {texts: {[text]: items}}});
+      });
+      const beforeClick = await youtubeWorker.evaluate(() => glossRequests.length);
+      await page.locator('#open-video').click();
+      await waitState(value => value.video && value.source === 'timeline');
+      await page.locator('#movie_player video').evaluate(node => { node.currentTime = 1.02; node.dispatchEvent(new Event('timeupdate')); });
+      await waitState(value => value.caption === 'Clicked video bank doomscrolling.');
+      assert.equal(await page.locator('#movie_player [data-echo-youtube]').count(), 1, 'overlay sits on the watch player, not the preview');
+      await page.waitForFunction(() => document.querySelector('#movie_player [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="bank"] .zh')?.textContent === '岸');
+      await page.waitForFunction(() => document.querySelector('#movie_player [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="doomscrolling"] .zh')?.textContent === '末日刷屏');
+      assert(await youtubeWorker.evaluate(before => glossRequests.length > before && glossRequests.some(record =>
+        record.text === 'Clicked video bank doomscrolling.' && record.session === 'yt:clicked'), beforeClick), 'click enters translation for the new video');
+      assert.equal(await page.locator('#inline-preview-player [data-echo-youtube]').count(), 0, 'preview never owns Echo subtitles');
+      await page.waitForFunction(() => document.querySelector('#movie_player [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="doomscrolling"] .zh')?.textContent === '末日刷屏');
+      assert((await page.locator('#movie_player [data-echo-youtube] [data-lemma="doomscrolling"]').getAttribute('title')).includes('模型补译'), 'old missing cue is refreshed with a model gloss');
+    }
+    if (!live) {
+      // YT-012: real portrait geometry and several retained reel players. Neither
+      // the old watch player nor the inactive #shorts-player owns the new clock.
+      await page.evaluate(() => {
+        document.querySelector('#movie_player').style.display = 'none';
+        document.body.insertAdjacentHTML('beforeend', `
+          <ytd-reel-video-renderer id="retired-reel" style="display:none"><div id="shorts-player" class="html5-video-player"><video></video></div></ytd-reel-video-renderer>
+          <ytd-reel-video-renderer id="short-a" is-active><div class="html5-video-player" style="position:relative;width:350px;height:622px;background:#162b3b;margin:auto"><video></video><div class="ytp-caption-window-container"><span class="ytp-caption-segment"></span></div></div></ytd-reel-video-renderer>
+          <ytd-reel-video-renderer id="short-b" style="display:none"><div class="html5-video-player" style="position:relative;width:350px;height:622px;background:#162b3b;margin:auto"><video></video><div class="ytp-caption-window-container"><span class="ytp-caption-segment"></span></div></div></ytd-reel-video-renderer>`);
+        for (const id of ['short-a', 'short-b']) {
+          const player = document.querySelector(`#${id} .html5-video-player`);
+          player.dataset.captionOn = 'false'; player.dataset.toggles = '0';
+          let selected = null;
+          const on = () => player.dataset.captionOn === 'true';
+          if (id === 'short-a') player.isSubtitlesOn = on;
+          player.getOption = (module, name) => name === 'track' ? selected : undefined;
+          player.loadModule = name => { if (name === 'captions') player.dataset.captionLoaded = 'true'; };
+          player.setOption = (module, name, track) => { if (name === 'track') selected = track; };
+          const toggle = () => {
+            player.dataset.toggles = String(Number(player.dataset.toggles) + 1);
+            player.dataset.captionOn = String(!on());
+            // The site's own player only requests a fresh-token track after CC
+            // is enabled. A direct baseUrl request deliberately returns empty.
+            if (on()) void fetch(`/api/timedtext?lang=en&v=${id}&pot=fixture`);
+          };
+          if (id === 'short-a') player.toggleSubtitles = toggle;
+          else {
+            const cc = document.createElement('button'); cc.className = 'ytp-subtitles-button';
+            cc.setAttribute('aria-pressed', 'false'); cc.textContent = 'CC'; cc.style.cssText = 'position:absolute;top:0;left:0';
+            cc.onclick = () => { toggle(); cc.setAttribute('aria-pressed', String(on())); };
+            player.append(cc);
+          }
+          player.getPlayerResponse = () => ({videoDetails: {videoId: id}, captions: {playerCaptionsTracklistRenderer: {
+            captionTracks: [{languageCode: 'en', vssId: '.en', baseUrl: `${location.origin}/api/timedtext?lang=en&v=${id}`}]}}});
+          player.querySelector('video').currentTime = 1.02;
+        }
+        history.pushState({}, '', '/shorts/short-a');
+      });
+      await waitState(value => value.source === 'timeline' && value.caption === 'Short river bank.');
+      assert.equal(await page.locator('#short-a .html5-video-player').getAttribute('data-caption-on'), 'true', 'Shorts CC starts automatically');
+      assert.equal(await page.locator('#short-b .html5-video-player').getAttribute('data-caption-on'), 'false', 'inactive Shorts is untouched');
+      assert(await page.locator('#short-a .html5-video-player').evaluate(player => player.getOption('captions', 'track').languageCode === 'en'), 'English track is selected');
+      const portraitBank = () => page.locator('ytd-reel-video-renderer[is-active] [data-echo-youtube] [data-lemma="bank"]');
+      await page.waitForFunction(() => document.querySelector('#short-a [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="bank"] .zh')?.textContent === '岸');
+      assert.equal(await page.locator('#shorts-player [data-echo-youtube]').count(), 0, 'inactive Shorts player is ignored');
+      const geometry = await page.locator('#short-a [data-echo-youtube]').evaluate(node => {
+        const box = node.getBoundingClientRect(), parent = node.parentElement.getBoundingClientRect();
+        const panel = node.shadowRoot.querySelector('.panel');
+        return {portrait: node.hasAttribute('data-portrait'), fits: box.left >= parent.left && box.right <= parent.right &&
+          box.top >= parent.top && box.bottom <= parent.bottom, font: parseFloat(getComputedStyle(node).fontSize),
+          overflow: panel.scrollWidth > panel.clientWidth};
+      });
+      assert(geometry.portrait && geometry.fits && geometry.font >= 12 && !geometry.overflow, 'portrait captions fit inside the narrow player');
+      const beforeShortLearn = await youtubeWorker.evaluate(() => glossRequests.length);
+      await portraitBank().click();
+      await page.waitForFunction(() => document.querySelector('#short-a [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="bank"][data-known]'));
+      await portraitBank().click();
+      await page.waitForFunction(() => document.querySelector('#short-a [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="bank"] .zh')?.textContent === '岸');
+      assert.equal(await youtubeWorker.evaluate(() => glossRequests.length), beforeShortLearn, 'portrait learning reuses the translation');
+      // Even with a cached timeline, the site resetting CC must recover without
+      // user input; polling an already enabled player must never toggle it off.
+      await page.locator('#short-a .html5-video-player').evaluate(player => { player.dataset.captionOn = 'false'; });
+      await page.waitForFunction(() => document.querySelector('#short-a .html5-video-player').dataset.captionOn === 'true');
+      const toggles = await page.locator('#short-a .html5-video-player').getAttribute('data-toggles');
+      await page.waitForTimeout(1200);
+      assert.equal(await page.locator('#short-a .html5-video-player').getAttribute('data-toggles'), toggles, 'enabled captions are never blindly toggled');
+      assert.equal(await youtubeWorker.evaluate(() => glossRequests.length), beforeShortLearn, 'CC recovery reuses translated subtitles');
+      await page.locator('#short-a video').evaluate(node => { node.currentTime = 2.02; });
+      await waitState(value => value.caption === 'Short pending work.' && value.pending > 0);
+      const switchShort = id => page.evaluate(id => {
+        for (const reel of document.querySelectorAll('ytd-reel-video-renderer')) {
+          const active = reel.id === id; reel.toggleAttribute('is-active', active); reel.style.display = active ? 'block' : 'none';
+        }
+        document.querySelector(`#${id} video`).currentTime = 1.02;
+        history.pushState({}, '', `/shorts/${id}`);
+      }, id);
+      await switchShort('short-b');
+      await waitState(value => value.source === 'timeline' && value.caption === 'Short bank loan.');
+      assert.equal(await page.locator('#short-b .html5-video-player').getAttribute('data-caption-on'), 'true', 'swiping enables CC on the next reel');
+      await page.waitForFunction(() => document.querySelector('#short-b [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="bank"] .zh')?.textContent === '银行');
+      assert.equal(await page.locator('#short-a [data-echo-youtube]').count(), 0, 'previous reel overlay is removed');
+      assert(await youtubeWorker.evaluate(() => glossRequests.some(record => record.session === 'yt:short-a' && record.text.includes('pending') && record.aborted)), 'swiping cancels the old reel request');
+      const beforeReturn = await youtubeWorker.evaluate(() => glossRequests.filter(record => record.text === 'Short river bank.').length);
+      await switchShort('short-a');
+      await waitState(value => value.caption === 'Short river bank.');
+      await page.waitForFunction(() => document.querySelector('#short-a [data-echo-youtube]')?.shadowRoot.querySelector('[data-lemma="bank"] .zh')?.textContent === '岸');
+      assert.equal(await youtubeWorker.evaluate(() => glossRequests.filter(record => record.text === 'Short river bank.').length), beforeReturn, 'returning to a reel restores its saved translation');
+      if (process.env.ECHO_TEST_SCREENSHOT) await page.locator('#short-a .html5-video-player').screenshot({path: process.env.ECHO_TEST_SCREENSHOT});
+      console.log('PASS YT-012: active portrait reel, narrow layout, translation, learning, swipe cancellation and saved return');
     }
     await youtubeWorker.evaluate(() => chrome.storage.local.set({enabled: false}));
     await waitState(value => !value.enabled);
+    if (!live) {
+      await page.locator('#short-a .html5-video-player').evaluate(player => { player.dataset.captionOn = 'false'; });
+      await page.waitForTimeout(1200);
+      assert.equal(await page.locator('#short-a .html5-video-player').getAttribute('data-caption-on'), 'false', 'disabling Echo stops automatic CC changes');
+    }
     assert.equal(await page.locator('[data-echo-youtube]').count(), 0, 'disable removes overlay and owned style');
     assert(!await page.locator('#movie_player').getAttribute('data-echo-youtube-active'));
     const popup = await context.newPage();

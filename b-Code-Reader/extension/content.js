@@ -92,7 +92,7 @@
       element.toggleAttribute('data-pending', item.state === 'pending' && !known);
       element.toggleAttribute('data-degraded', item.state === 'degraded');
       element.title = known ? '已学会 · 点击恢复中文（链接内 Alt＋点击）' :
-        `${item.gloss || ''}${item.state === 'pending' ? ' · 正在按语境选义' : ''}${item.fallback_reason ? ` · 默认释义：${item.fallback_reason}` : ''} · 点击标熟（链接内 Alt＋点击）`;
+        `${item.gloss || ''}${item.source === 'model' ? ' · 模型补译' : ''}${item.state === 'pending' ? ' · 正在按语境选义' : ''}${item.fallback_reason ? ` · 处理状态：${item.fallback_reason}` : ''} · 点击标熟（链接内 Alt＋点击）`;
     }
     if (record.zh) record.zh.textContent = known ? '' : item.gloss || '';
   }

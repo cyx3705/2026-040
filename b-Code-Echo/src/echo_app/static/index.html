@@ -28,7 +28,7 @@
       </div>
       <div class="nav-right">
         <span class="engine" id="engine" data-state="checking">
-          <span class="dot" aria-hidden="true"></span><span id="engine-text">检查引擎…</span>
+          <span class="dot" aria-hidden="true"></span><span id="engine-text">检查推理服务…</span>
         </span>
         <button class="text-btn" id="open-words" aria-label="打开单词表，导入或挑词练习">单词表</button>
         <button class="text-btn" id="open-dict" aria-label="打开词典，查看学会的词">
@@ -62,7 +62,8 @@
             <div class="section-head">
               <h1 id="chat-title">对话</h1>
               <div class="ink-bar">
-                <button class="model-btn" id="model-btn" aria-haspopup="listbox" aria-expanded="false" title="选择模型">
+                <button class="model-btn" id="model-btn" aria-haspopup="listbox" aria-expanded="false" title="更换模型">
+                  <span>更换模型</span>
                   <span id="model-note">本地模型</span>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
                 </button>
@@ -126,7 +127,7 @@
               </select>
             </label>
             <label for="debug-parallel">并发
-              <select id="debug-parallel" title="原生模式：1 正文结束后选义，2 正文与选义交错执行；兼容模式会重启引擎" disabled>
+              <select id="debug-parallel" title="Echo 同时发出的推理请求上限；外部服务自行排队，不改变服务槽数" disabled>
                 <option value="1" selected>1</option><option value="2">2</option>
               </select>
             </label>
