@@ -1,0 +1,1815 @@
+{
+  "mode": "native",
+  "model": "qwen3:8b",
+  "learned_lemmas": 632,
+  "date": "2026-10-28 14:06",
+  "suggest": {
+    "native": {
+      "same_prefix": {
+        "first": {
+          "n": 5,
+          "p50_ms": 59.7,
+          "p95_ms": 293.3
+        },
+        "following": {
+          "n": 15,
+          "p50_ms": 4.1,
+          "p95_ms": 7.0
+        },
+        "following_within": {
+          "<= 100 ms": 1.0,
+          "<= 239 ms": 1.0,
+          "<= 481 ms": 1.0,
+          "<= 1000 ms": 1.0
+        },
+        "following_raw": [
+          7.02,
+          4.22,
+          4.29,
+          6.13,
+          3.76,
+          3.62,
+          5.95,
+          4.01,
+          4.11,
+          6.28,
+          3.9,
+          3.73,
+          5.94,
+          3.49,
+          3.62
+        ],
+        "valid_candidates_mean": 5,
+        "samples": [
+          {
+            "text": "I want to m",
+            "target": null,
+            "words": [
+              "make",
+              "my",
+              "me",
+              "more",
+              "man"
+            ]
+          },
+          {
+            "text": "I want to ma",
+            "target": null,
+            "words": [
+              "make",
+              "man",
+              "many",
+              "may",
+              "maybe"
+            ]
+          },
+          {
+            "text": "I want to mak",
+            "target": null,
+            "words": [
+              "make",
+              "maker",
+              "makeup",
+              "making",
+              "makeshift"
+            ]
+          },
+          {
+            "text": "I want to make",
+            "target": null,
+            "words": [
+              "make",
+              "maker",
+              "makeup",
+              "makeshift",
+              "makeover"
+            ]
+          }
+        ]
+      },
+      "changing_words": {
+        "first": {
+          "n": 5,
+          "p50_ms": 49.1,
+          "p95_ms": 54.1
+        },
+        "following": {
+          "n": 20,
+          "p50_ms": 19.0,
+          "p95_ms": 26.6
+        },
+        "following_within": {
+          "<= 100 ms": 1.0,
+          "<= 239 ms": 1.0,
+          "<= 481 ms": 1.0,
+          "<= 1000 ms": 1.0
+        },
+        "following_raw": [
+          76.67,
+          26.63,
+          19.55,
+          18.13,
+          19.83,
+          19.54,
+          17.79,
+          17.72,
+          20.22,
+          18.93,
+          18.04,
+          18.24,
+          19.46,
+          19.26,
+          18.06,
+          17.71,
+          18.99,
+          19.29,
+          18.2,
+          17.97
+        ],
+        "valid_candidates_mean": 5,
+        "samples": [
+          {
+            "text": "I ",
+            "target": null,
+            "words": [
+              "have",
+              "like",
+              "am",
+              "want",
+              "think"
+            ]
+          },
+          {
+            "text": "I want ",
+            "target": null,
+            "words": [
+              "to",
+              "a",
+              "you",
+              "some",
+              "go"
+            ]
+          },
+          {
+            "text": "I want to ",
+            "target": null,
+            "words": [
+              "go",
+              "learn",
+              "make",
+              "try",
+              "buy"
+            ]
+          },
+          {
+            "text": "I want to learn ",
+            "target": null,
+            "words": [
+              "English",
+              "how",
+              "to",
+              "more",
+              "about"
+            ]
+          },
+          {
+            "text": "I want to learn English ",
+            "target": null,
+            "words": [
+              ".",
+              ",",
+              "well",
+              "for",
+              "with"
+            ]
+          }
+        ]
+      },
+      "history_words": {
+        "first": {
+          "n": 5,
+          "p50_ms": 216.1,
+          "p95_ms": 223.8
+        },
+        "following": {
+          "n": 20,
+          "p50_ms": 20.2,
+          "p95_ms": 22.3
+        },
+        "following_within": {
+          "<= 100 ms": 1.0,
+          "<= 239 ms": 1.0,
+          "<= 481 ms": 1.0,
+          "<= 1000 ms": 1.0
+        },
+        "following_raw": [
+          22.45,
+          20.1,
+          20.24,
+          19.39,
+          22.27,
+          21.13,
+          19.1,
+          19.24,
+          21.53,
+          20.89,
+          20.32,
+          20.18,
+          22.3,
+          19.83,
+          19.46,
+          19.24,
+          21.95,
+          21.34,
+          19.83,
+          18.95
+        ],
+        "valid_candidates_mean": 5,
+        "samples": [
+          {
+            "text": "I ",
+            "target": null,
+            "words": [
+              "enjoy",
+              "like",
+              "love",
+              "have",
+              "enjoyed"
+            ]
+          },
+          {
+            "text": "I would ",
+            "target": null,
+            "words": [
+              "like",
+              "rather",
+              "love",
+              "really",
+              "prefer"
+            ]
+          },
+          {
+            "text": "I would like ",
+            "target": null,
+            "words": [
+              "to",
+              "you",
+              "a",
+              "some",
+              "the"
+            ]
+          },
+          {
+            "text": "I would like to ",
+            "target": null,
+            "words": [
+              "learn",
+              "go",
+              "have",
+              "know",
+              "practice"
+            ]
+          },
+          {
+            "text": "I would like to learn ",
+            "target": null,
+            "words": [
+              "English",
+              "more",
+              "how",
+              "some",
+              "to"
+            ]
+          }
+        ]
+      },
+      "history_edits": {
+        "first": {
+          "n": 5,
+          "p50_ms": 213.2,
+          "p95_ms": 218.2
+        },
+        "following": {
+          "n": 20,
+          "p50_ms": 20.4,
+          "p95_ms": 22.3
+        },
+        "following_within": {
+          "<= 100 ms": 1.0,
+          "<= 239 ms": 1.0,
+          "<= 481 ms": 1.0,
+          "<= 1000 ms": 1.0
+        },
+        "following_raw": [
+          24.55,
+          20.2,
+          19.07,
+          18.93,
+          22.34,
+          20.95,
+          20.38,
+          19.31,
+          21.08,
+          21.31,
+          19.88,
+          20.77,
+          20.86,
+          21.38,
+          20.43,
+          19.21,
+          21.56,
+          20.39,
+          19.02,
+          19.63
+        ],
+        "valid_candidates_mean": 5,
+        "samples": [
+          {
+            "text": "I would like to learn ",
+            "target": null,
+            "words": [
+              "English",
+              "more",
+              "how",
+              "to",
+              "some"
+            ]
+          },
+          {
+            "text": "I would like to go ",
+            "target": null,
+            "words": [
+              "to",
+              "on",
+              "out",
+              "for",
+              "somewhere"
+            ]
+          },
+          {
+            "text": "I would like ",
+            "target": null,
+            "words": [
+              "to",
+              "you",
+              "a",
+              "some",
+              "the"
+            ]
+          },
+          {
+            "text": "I would ",
+            "target": null,
+            "words": [
+              "like",
+              "rather",
+              "love",
+              "really",
+              "prefer"
+            ]
+          },
+          {
+            "text": "I ",
+            "target": null,
+            "words": [
+              "enjoy",
+              "like",
+              "love",
+              "have",
+              "enjoyed"
+            ]
+          }
+        ]
+      },
+      "history_keystrokes": {
+        "first": {
+          "n": 5,
+          "p50_ms": 220.0,
+          "p95_ms": 242.7
+        },
+        "following": {
+          "n": 250,
+          "p50_ms": 5.3,
+          "p95_ms": 22.4
+        },
+        "following_within": {
+          "<= 100 ms": 1.0,
+          "<= 239 ms": 1.0,
+          "<= 481 ms": 1.0,
+          "<= 1000 ms": 1.0
+        },
+        "following_raw": [
+          22.09,
+          24.32,
+          4.96,
+          4.24,
+          4.57,
+          4.37,
+          20.06,
+          49.03,
+          6.43,
+          5.17,
+          5.03,
+          19.79,
+          6.45,
+          12.15,
+          19.87,
+          23.29,
+          5.31,
+          4.72,
+          4.42,
+          4.21,
+          19.71,
+          92.44,
+          21.09,
+          8.01,
+          5.0,
+          4.87,
+          4.43,
+          4.74,
+          20.19,
+          93.85,
+          7.6,
+          5.71,
+          5.13,
+          20.16,
+          8.01,
+          5.91,
+          5.39,
+          5.17,
+          20.1,
+          12.76,
+          5.03,
+          20.53,
+          43.51,
+          6.03,
+          4.65,
+          4.35,
+          4.36,
+          4.35,
+          4.59,
+          22.34,
+          21.19,
+          6.76,
+          4.9,
+          4.2,
+          4.17,
+          4.06,
+          20.05,
+          8.98,
+          5.27,
+          4.42,
+          4.61,
+          18.93,
+          4.51,
+          5.0,
+          20.04,
+          6.57,
+          5.16,
+          4.84,
+          4.76,
+          4.67,
+          19.88,
+          14.1,
+          19.42,
+          5.61,
+          5.22,
+          4.57,
+          4.42,
+          4.39,
+          18.69,
+          14.98,
+          5.97,
+          5.12,
+          4.59,
+          20.73,
+          10.14,
+          5.67,
+          5.22,
+          4.89,
+          18.86,
+          12.32,
+          4.65,
+          19.51,
+          9.89,
+          5.08,
+          4.31,
+          4.53,
+          4.41,
+          4.49,
+          4.28,
+          21.32,
+          22.4,
+          7.3,
+          4.97,
+          4.54,
+          4.4,
+          5.0,
+          21.18,
+          8.98,
+          5.17,
+          4.29,
+          4.61,
+          19.49,
+          5.13,
+          5.66,
+          20.18,
+          6.74,
+          5.29,
+          4.86,
+          5.06,
+          5.03,
+          20.22,
+          14.21,
+          21.21,
+          5.35,
+          5.07,
+          4.7,
+          4.69,
+          4.48,
+          19.07,
+          15.37,
+          6.85,
+          5.2,
+          4.85,
+          19.25,
+          6.97,
+          5.12,
+          4.95,
+          4.77,
+          19.8,
+          12.42,
+          4.89,
+          19.17,
+          10.37,
+          6.35,
+          5.2,
+          5.01,
+          5.0,
+          5.23,
+          4.88,
+          21.47,
+          21.46,
+          7.48,
+          4.59,
+          5.37,
+          4.91,
+          4.92,
+          20.77,
+          9.79,
+          5.96,
+          4.66,
+          4.69,
+          19.42,
+          5.01,
+          5.26,
+          18.77,
+          6.64,
+          4.9,
+          4.55,
+          4.32,
+          4.65,
+          19.17,
+          13.75,
+          22.34,
+          4.89,
+          4.59,
+          4.29,
+          4.22,
+          4.19,
+          22.28,
+          14.6,
+          6.39,
+          5.05,
+          4.38,
+          22.29,
+          6.93,
+          4.88,
+          4.55,
+          4.85,
+          22.85,
+          12.37,
+          4.89,
+          19.27,
+          9.67,
+          5.66,
+          5.42,
+          5.08,
+          4.95,
+          5.12,
+          4.6,
+          21.06,
+          25.89,
+          7.72,
+          5.08,
+          4.63,
+          4.74,
+          4.72,
+          24.61,
+          9.48,
+          5.91,
+          5.81,
+          4.38,
+          22.7,
+          4.8,
+          5.25,
+          22.53,
+          6.57,
+          5.12,
+          4.6,
+          4.41,
+          4.3,
+          20.95,
+          14.01,
+          20.54,
+          5.33,
+          4.92,
+          4.85,
+          5.16,
+          5.5,
+          21.02,
+          15.25,
+          6.46,
+          5.56,
+          4.9,
+          21.57,
+          7.85,
+          4.94,
+          4.65,
+          4.61,
+          21.26,
+          13.29,
+          5.82,
+          21.5,
+          10.61,
+          6.1,
+          5.47,
+          5.23,
+          4.91,
+          4.81,
+          4.99,
+          23.28
+        ],
+        "valid_candidates_mean": 4.76,
+        "samples": [
+          {
+            "text": "I",
+            "target": "I",
+            "words": [
+              "I",
+              "It",
+              "In",
+              "If",
+              "Into"
+            ]
+          },
+          {
+            "text": "I ",
+            "target": "would",
+            "words": [
+              "enjoy",
+              "like",
+              "love",
+              "have",
+              "enjoyed"
+            ]
+          },
+          {
+            "text": "I w",
+            "target": "would",
+            "words": [
+              "want",
+              "would",
+              "with",
+              "we",
+              "what"
+            ]
+          },
+          {
+            "text": "I wo",
+            "target": "would",
+            "words": [
+              "would",
+              "woman",
+              "work",
+              "world",
+              "word"
+            ]
+          },
+          {
+            "text": "I wou",
+            "target": "would",
+            "words": [
+              "would",
+              "wound",
+              "wounded",
+              "wounding"
+            ]
+          },
+          {
+            "text": "I woul",
+            "target": "would",
+            "words": [
+              "would"
+            ]
+          },
+          {
+            "text": "I would",
+            "target": "would",
+            "words": [
+              "would"
+            ]
+          },
+          {
+            "text": "I would ",
+            "target": "like",
+            "words": [
+              "like",
+              "rather",
+              "love",
+              "prefer",
+              "really"
+            ]
+          },
+          {
+            "text": "I would l",
+            "target": "like",
+            "words": [
+              "like",
+              "love",
+              "lie",
+              "look",
+              "life"
+            ]
+          },
+          {
+            "text": "I would li",
+            "target": "like",
+            "words": [
+              "like",
+              "lie",
+              "life",
+              "live",
+              "little"
+            ]
+          },
+          {
+            "text": "I would lik",
+            "target": "like",
+            "words": [
+              "like",
+              "likely",
+              "likewise",
+              "likelihood",
+              "liken"
+            ]
+          },
+          {
+            "text": "I would like",
+            "target": "like",
+            "words": [
+              "like",
+              "likely",
+              "likewise",
+              "likelihood",
+              "liken"
+            ]
+          },
+          {
+            "text": "I would like ",
+            "target": "to",
+            "words": [
+              "to",
+              "you",
+              "a",
+              "some",
+              "the"
+            ]
+          },
+          {
+            "text": "I would like t",
+            "target": "to",
+            "words": [
+              "to",
+              "the",
+              "that",
+              "this",
+              "tea"
+            ]
+          },
+          {
+            "text": "I would like to",
+            "target": "to",
+            "words": [
+              "to",
+              "too",
+              "today",
+              "together",
+              "toward"
+            ]
+          },
+          {
+            "text": "I would like to ",
+            "target": "visit",
+            "words": [
+              "learn",
+              "go",
+              "have",
+              "know",
+              "talk"
+            ]
+          },
+          {
+            "text": "I would like to v",
+            "target": "visit",
+            "words": [
+              "visit",
+              "very",
+              "voice",
+              "view",
+              "value"
+            ]
+          },
+          {
+            "text": "I would like to vi",
+            "target": "visit",
+            "words": [
+              "visit",
+              "view",
+              "violence",
+              "victim",
+              "video"
+            ]
+          },
+          {
+            "text": "I would like to vis",
+            "target": "visit",
+            "words": [
+              "visit",
+              "vision",
+              "visitor",
+              "visual",
+              "visible"
+            ]
+          },
+          {
+            "text": "I would like to visi",
+            "target": "visit",
+            "words": [
+              "visit",
+              "vision",
+              "visitor",
+              "visible",
+              "visiting"
+            ]
+          },
+          {
+            "text": "I would like to visit",
+            "target": "visit",
+            "words": [
+              "visit",
+              "visitor",
+              "visiting",
+              "visitation",
+              "visitable"
+            ]
+          },
+          {
+            "text": "I would like to visit ",
+            "target": "a",
+            "words": [
+              "the",
+              "a",
+              "your",
+              "you",
+              "Japan"
+            ]
+          },
+          {
+            "text": "I would like to visit a",
+            "target": "a",
+            "words": [
+              "a",
+              "an",
+              "and",
+              "at",
+              "as"
+            ]
+          },
+          {
+            "text": "I would like to visit a ",
+            "target": "quiet",
+            "words": [
+              "park",
+              "museum",
+              "place",
+              "new",
+              "city"
+            ]
+          },
+          {
+            "text": "I would like to visit a q",
+            "target": "quiet",
+            "words": [
+              "quiet",
+              "question",
+              "quite",
+              "quickly",
+              "quality"
+            ]
+          },
+          {
+            "text": "I would like to visit a qu",
+            "target": "quiet",
+            "words": [
+              "quiet",
+              "question",
+              "quite",
+              "quickly",
+              "quality"
+            ]
+          },
+          {
+            "text": "I would like to visit a qui",
+            "target": "quiet",
+            "words": [
+              "quiet",
+              "quite",
+              "quickly",
+              "quick",
+              "quit"
+            ]
+          },
+          {
+            "text": "I would like to visit a quie",
+            "target": "quiet",
+            "words": [
+              "quiet",
+              "quietly",
+              "quietness",
+              "quiescent",
+              "quietude"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet",
+            "target": "quiet",
+            "words": [
+              "quiet",
+              "quietly",
+              "quietness",
+              "quietude",
+              "quieten"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet ",
+            "target": "park",
+            "words": [
+              "park",
+              "place",
+              "and",
+              "garden",
+              "library"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet p",
+            "target": "park",
+            "words": [
+              "park",
+              "place",
+              "people",
+              "put",
+              "problem"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet pa",
+            "target": "park",
+            "words": [
+              "park",
+              "part",
+              "pay",
+              "parent",
+              "party"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet par",
+            "target": "park",
+            "words": [
+              "park",
+              "part",
+              "parent",
+              "party",
+              "particularly"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park",
+            "target": "park",
+            "words": [
+              "park",
+              "parking",
+              "parka",
+              "parked",
+              "parkway"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park ",
+            "target": "with",
+            "words": [
+              "with",
+              "and",
+              ".",
+              ",",
+              "on"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park w",
+            "target": "with",
+            "words": [
+              "with",
+              "where",
+              "we",
+              "what",
+              "who"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park wi",
+            "target": "with",
+            "words": [
+              "with",
+              "will",
+              "without",
+              "within",
+              "win"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park wit",
+            "target": "with",
+            "words": [
+              "with",
+              "without",
+              "within",
+              "witness",
+              "withdraw"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with",
+            "target": "with",
+            "words": [
+              "with",
+              "without",
+              "within",
+              "withdraw",
+              "withdrawal"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with ",
+            "target": "my",
+            "words": [
+              "friends",
+              "you",
+              "my",
+              "some",
+              "a"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with m",
+            "target": "my",
+            "words": [
+              "my",
+              "many",
+              "make",
+              "me",
+              "more"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my",
+            "target": "my",
+            "words": [
+              "my",
+              "myself",
+              "mystery",
+              "myth",
+              "mysterious"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my ",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friend",
+              "family",
+              "best",
+              "good"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my f",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friend",
+              "family",
+              "favorite",
+              "for"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my fr",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friend",
+              "from",
+              "free",
+              "front"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my fri",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friend",
+              "friendly",
+              "friendship",
+              "frighten"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my frie",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friend",
+              "friendly",
+              "friendship",
+              "fried"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my frien",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friend",
+              "friendly",
+              "friendship",
+              "friendliness"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my friend",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friend",
+              "friendly",
+              "friendship",
+              "friendliness"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my friends",
+            "target": "friends",
+            "words": [
+              "friends",
+              "friendship"
+            ]
+          },
+          {
+            "text": "I would like to visit a quiet park with my friends.",
+            "target": null,
+            "words": [
+              "We",
+              "What",
+              "I",
+              "Do",
+              "It"
+            ]
+          }
+        ],
+        "hit_at_1": 0.88,
+        "hit_at_5": 0.94,
+        "hit_inputs": 250
+      }
+    }
+  },
+  "sense": {
+    "summary": {
+      "selection": {
+        "n": 42,
+        "p50_ms": 204.4,
+        "p95_ms": 266.8
+      },
+      "correct": 42,
+      "total": 42,
+      "in_dictionary": 42,
+      "prefix_prefill": {
+        "n": 42,
+        "p50_ms": 8.6,
+        "p95_ms": 10.1
+      }
+    },
+    "rows": [
+      {
+        "case": "river_bank",
+        "round": 0,
+        "prefix_prefill_ms": 10.474799993971828,
+        "ms": 178.23629999475088,
+        "answer": "岸",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "financial_bank",
+        "round": 0,
+        "prefix_prefill_ms": 9.826499997870997,
+        "ms": 158.62950000155251,
+        "answer": "银行",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bank_unclear",
+        "round": 0,
+        "prefix_prefill_ms": 7.634399997186847,
+        "ms": 163.77730000385782,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "like_preposition",
+        "round": 0,
+        "prefix_prefill_ms": 8.154200004355516,
+        "ms": 271.57879999867873,
+        "answer": "如同",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "like_verb",
+        "round": 0,
+        "prefix_prefill_ms": 8.3639000004041,
+        "ms": 220.94559999823105,
+        "answer": "喜欢",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "dish_food",
+        "round": 0,
+        "prefix_prefill_ms": 8.66840000526281,
+        "ms": 162.2669999997015,
+        "answer": "菜肴",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "dish_plate",
+        "round": 0,
+        "prefix_prefill_ms": 8.605100003478583,
+        "ms": 163.08530000242172,
+        "answer": "盘子",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "missing_phrasal_sense",
+        "round": 0,
+        "prefix_prefill_ms": 9.390899998834357,
+        "ms": 157.56949999922654,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "sound_incomplete",
+        "round": 0,
+        "prefix_prefill_ms": 8.529700004146434,
+        "ms": 259.0621999988798,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "sound_noun",
+        "round": 0,
+        "prefix_prefill_ms": 9.365300000354182,
+        "ms": 256.20709999930114,
+        "answer": "声音",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bill_payment",
+        "round": 0,
+        "prefix_prefill_ms": 8.572999999159947,
+        "ms": 202.86510000005364,
+        "answer": "帐单",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bill_bird",
+        "round": 0,
+        "prefix_prefill_ms": 8.430100002442487,
+        "ms": 207.66729999741074,
+        "answer": "鸟嘴",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "light_weight",
+        "round": 0,
+        "prefix_prefill_ms": 9.642099998018239,
+        "ms": 266.84849999583093,
+        "answer": "轻的",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "light_lamp",
+        "round": 0,
+        "prefix_prefill_ms": 9.472799996729009,
+        "ms": 253.4051999973599,
+        "answer": "灯",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "river_bank",
+        "round": 1,
+        "prefix_prefill_ms": 9.303300001192838,
+        "ms": 153.76739999919664,
+        "answer": "岸",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "financial_bank",
+        "round": 1,
+        "prefix_prefill_ms": 8.117999997921288,
+        "ms": 159.49810000165598,
+        "answer": "银行",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bank_unclear",
+        "round": 1,
+        "prefix_prefill_ms": 7.748299998638686,
+        "ms": 156.29579999949783,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "like_preposition",
+        "round": 1,
+        "prefix_prefill_ms": 7.804699998814613,
+        "ms": 227.11319999507396,
+        "answer": "如同",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "like_verb",
+        "round": 1,
+        "prefix_prefill_ms": 7.886600003985222,
+        "ms": 222.56190000189235,
+        "answer": "喜欢",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "dish_food",
+        "round": 1,
+        "prefix_prefill_ms": 8.960399994975887,
+        "ms": 157.6894000027096,
+        "answer": "菜肴",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "dish_plate",
+        "round": 1,
+        "prefix_prefill_ms": 7.665599994652439,
+        "ms": 163.60789999453118,
+        "answer": "盘子",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "missing_phrasal_sense",
+        "round": 1,
+        "prefix_prefill_ms": 9.636499999032822,
+        "ms": 153.7508000037633,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "sound_incomplete",
+        "round": 1,
+        "prefix_prefill_ms": 7.499499995901715,
+        "ms": 260.987000001478,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "sound_noun",
+        "round": 1,
+        "prefix_prefill_ms": 8.660200001031626,
+        "ms": 262.9862999965553,
+        "answer": "声音",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bill_payment",
+        "round": 1,
+        "prefix_prefill_ms": 9.132400002272334,
+        "ms": 210.70310000504833,
+        "answer": "帐单",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bill_bird",
+        "round": 1,
+        "prefix_prefill_ms": 9.356499998830259,
+        "ms": 203.55929999641376,
+        "answer": "鸟嘴",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "light_weight",
+        "round": 1,
+        "prefix_prefill_ms": 7.766300004732329,
+        "ms": 270.68660000077216,
+        "answer": "轻的",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "light_lamp",
+        "round": 1,
+        "prefix_prefill_ms": 8.319500004290603,
+        "ms": 255.213399999775,
+        "answer": "灯",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "river_bank",
+        "round": 2,
+        "prefix_prefill_ms": 8.009699995454866,
+        "ms": 156.22079999593552,
+        "answer": "岸",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "financial_bank",
+        "round": 2,
+        "prefix_prefill_ms": 9.576999997079838,
+        "ms": 156.77270000014687,
+        "answer": "银行",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bank_unclear",
+        "round": 2,
+        "prefix_prefill_ms": 9.543699998175725,
+        "ms": 156.1068000009982,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "like_preposition",
+        "round": 2,
+        "prefix_prefill_ms": 9.92269999551354,
+        "ms": 223.51589999743737,
+        "answer": "如同",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "like_verb",
+        "round": 2,
+        "prefix_prefill_ms": 9.094399996683933,
+        "ms": 226.83049999614013,
+        "answer": "喜欢",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "dish_food",
+        "round": 2,
+        "prefix_prefill_ms": 8.340899999893736,
+        "ms": 161.29519999958575,
+        "answer": "菜肴",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "dish_plate",
+        "round": 2,
+        "prefix_prefill_ms": 9.286900000006426,
+        "ms": 160.2370999971754,
+        "answer": "盘子",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "missing_phrasal_sense",
+        "round": 2,
+        "prefix_prefill_ms": 10.123300002305768,
+        "ms": 158.52060000179335,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "sound_incomplete",
+        "round": 2,
+        "prefix_prefill_ms": 7.855699994252063,
+        "ms": 254.71220000326866,
+        "answer": "0",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "sound_noun",
+        "round": 2,
+        "prefix_prefill_ms": 9.529499999189284,
+        "ms": 255.62270000227727,
+        "answer": "声音",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bill_payment",
+        "round": 2,
+        "prefix_prefill_ms": 7.956599998578895,
+        "ms": 202.2852000009152,
+        "answer": "帐单",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "bill_bird",
+        "round": 2,
+        "prefix_prefill_ms": 7.946700003230944,
+        "ms": 205.25300000008428,
+        "answer": "鸟嘴",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "light_weight",
+        "round": 2,
+        "prefix_prefill_ms": 7.695500004047062,
+        "ms": 265.515700004471,
+        "answer": "轻的",
+        "correct": true,
+        "in_dictionary": true
+      },
+      {
+        "case": "light_lamp",
+        "round": 2,
+        "prefix_prefill_ms": 10.514299996430054,
+        "ms": 246.67399999452755,
+        "answer": "灯",
+        "correct": true,
+        "in_dictionary": true
+      }
+    ]
+  },
+  "reverse": {
+    "summary": {
+      "selection": {
+        "n": 15,
+        "p50_ms": 107.0,
+        "p95_ms": 109.7
+      },
+      "correct": 15,
+      "total": 15
+    },
+    "rows": [
+      {
+        "chinese": "苹果",
+        "round": 0,
+        "choices": 20,
+        "ms": 108.19660000561271,
+        "answer": "apple",
+        "correct": true
+      },
+      {
+        "chinese": "你好",
+        "round": 0,
+        "choices": 17,
+        "ms": 105.15879999729805,
+        "answer": "hi",
+        "correct": true
+      },
+      {
+        "chinese": "学习",
+        "round": 0,
+        "choices": 20,
+        "ms": 107.03189999912865,
+        "answer": "study",
+        "correct": true
+      },
+      {
+        "chinese": "银行",
+        "round": 0,
+        "choices": 20,
+        "ms": 106.83769999741344,
+        "answer": "bank",
+        "correct": true
+      },
+      {
+        "chinese": "冰淇淋",
+        "round": 0,
+        "choices": 20,
+        "ms": 109.67950000485871,
+        "answer": "ice cream",
+        "correct": true
+      },
+      {
+        "chinese": "苹果",
+        "round": 1,
+        "choices": 20,
+        "ms": 109.09949999768287,
+        "answer": "apple",
+        "correct": true
+      },
+      {
+        "chinese": "你好",
+        "round": 1,
+        "choices": 17,
+        "ms": 103.89439999562455,
+        "answer": "hi",
+        "correct": true
+      },
+      {
+        "chinese": "学习",
+        "round": 1,
+        "choices": 20,
+        "ms": 104.1992999962531,
+        "answer": "study",
+        "correct": true
+      },
+      {
+        "chinese": "银行",
+        "round": 1,
+        "choices": 20,
+        "ms": 107.51999999774853,
+        "answer": "bank",
+        "correct": true
+      },
+      {
+        "chinese": "冰淇淋",
+        "round": 1,
+        "choices": 20,
+        "ms": 107.645500000217,
+        "answer": "ice cream",
+        "correct": true
+      },
+      {
+        "chinese": "苹果",
+        "round": 2,
+        "choices": 20,
+        "ms": 106.08440000214614,
+        "answer": "apple",
+        "correct": true
+      },
+      {
+        "chinese": "你好",
+        "round": 2,
+        "choices": 17,
+        "ms": 105.64289999456378,
+        "answer": "hi",
+        "correct": true
+      },
+      {
+        "chinese": "学习",
+        "round": 2,
+        "choices": 20,
+        "ms": 109.51019999629352,
+        "answer": "study",
+        "correct": true
+      },
+      {
+        "chinese": "银行",
+        "round": 2,
+        "choices": 20,
+        "ms": 105.99489999731304,
+        "answer": "bank",
+        "correct": true
+      },
+      {
+        "chinese": "冰淇淋",
+        "round": 2,
+        "choices": 20,
+        "ms": 107.63800000131596,
+        "answer": "ice cream",
+        "correct": true
+      }
+    ]
+  },
+  "reply": {
+    "median": {
+      "first_ms": 68.2,
+      "gap_p50_ms": 36.1,
+      "gap_p95_ms": 40.0,
+      "english_ms": 1753.5,
+      "complete_ms": 2371.2
+    },
+    "runs": [
+      {
+        "chunks": 43,
+        "first_ms": 637.5,
+        "gap_p50_ms": 35.8,
+        "gap_p95_ms": 40.3,
+        "english_ms": 1842.5,
+        "complete_ms": 2341.7,
+        "model_glosses": 6,
+        "degraded": 0,
+        "glosses_before_text_done": 3
+      },
+      {
+        "chunks": 56,
+        "first_ms": 67.1,
+        "gap_p50_ms": 36.4,
+        "gap_p95_ms": 39.7,
+        "english_ms": 1650.1,
+        "complete_ms": 2371.2,
+        "model_glosses": 8,
+        "degraded": 0,
+        "glosses_before_text_done": 4
+      },
+      {
+        "chunks": 60,
+        "first_ms": 68.2,
+        "gap_p50_ms": 36.1,
+        "gap_p95_ms": 40.0,
+        "english_ms": 1753.5,
+        "complete_ms": 2705.3,
+        "model_glosses": 10,
+        "degraded": 0,
+        "glosses_before_text_done": 5
+      }
+    ]
+  },
+  "runtime": {
+    "kernel": "cpp",
+    "kernel_abi": 2,
+    "active_sequences": 0,
+    "active_branches": 0,
+    "a_tokens": 0,
+    "b_shared_positions": 0,
+    "b_suffix_positions": 0,
+    "prediction_cached_tokens": 0,
+    "prediction_reused_tokens": 0,
+    "prediction_evaluated_tokens": 0,
+    "logical_unique_positions": 0,
+    "session_tokens": 0,
+    "session_reused_tokens": 0,
+    "session_evaluated_tokens": 0,
+    "session_loaded_tokens": 0,
+    "session_loads": 0,
+    "session_saves": 0,
+    "session_save_failures": 0,
+    "fork_count": 81,
+    "release_count": 81,
+    "input_batch_max": 2,
+    "context_size": 4096,
+    "model": "qwen3:8b",
+    "shared_chat": true,
+    "top_tokens": true,
+    "backend": "llama.cpp-native",
+    "kv_unified": true,
+    "reader_sessions": true
+  }
+}

@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import json
 import math
+import re
 import sqlite3
 import statistics
 import tempfile
@@ -31,6 +32,19 @@ SUGGEST = [  # same sequences as native_suggest_performance.py
 # Every keystroke of one learner message after 12 dialogue turns.
 _TYPED = "I would like to visit a quiet park with my friends."
 SUGGEST.append(("history_keystrokes", True, [_TYPED[:i] for i in range(1, len(_TYPED) + 1)]))
+_TOKENS = [(m.start(), m.end(), m.group(0)) for m in re.finditer(r"[A-Za-z']+|[.,?!]", _TYPED)]
+
+
+def typed_target(text):
+    """Ground truth for hit@k: the word being typed, else the next word or mark; None at the end."""
+    if not _TYPED.startswith(text):
+        return None
+    partial = predict._PARTIAL.search(text)
+    if partial and not text[-1:].isspace():
+        return next(word for start, end, word in _TOKENS if start <= partial.start() < end)
+    return next((word for start, _, word in _TOKENS if start >= len(text)), None)
+
+
 # Typical prompt-engineering alternative: ask the chat model what comes next.
 PREDICT_PROMPT = ("The learner is typing their next message to you. Their unfinished text is:\n\"{text}\"\n"
                   "Predict the 5 words the learner is most likely to type next. If the text ends in the middle "
@@ -113,8 +127,8 @@ async def suggest_case(mode, server, backend, repeats, ollama=None):
         out[method] = {}
         for name, with_history, texts in SUGGEST:
             history = HISTORY if with_history else []
-            firsts, following, valid = [], [], []
-            for _ in range(repeats):
+            firsts, following, valid, hits, samples = [], [], [], [], []
+            for repeat in range(repeats):
                 if method == "native":  # creating a source clears the idle prediction KV
                     handle = await backend.create_sequence(model, "benchmark reset")
                     await backend.release_sequence(handle)
@@ -135,11 +149,22 @@ async def suggest_case(mode, server, backend, repeats, ollama=None):
                     valid.append(sum(1 for w in words[:5] if (w in predict.PUNCT or (
                         " " not in w.strip() and server.dictionary.is_word(w.strip())
                         and w.strip().lower().startswith(prefix)))))
+                    target = typed_target(text) if name == "history_keystrokes" else None
+                    if target is not None:
+                        ranked = [w.strip().lower() for w in words[:5]]
+                        hits.append((target.lower() in ranked[:1], target.lower() in ranked))
+                    if repeat == 0:
+                        samples.append({"text": text, "target": target, "words": words[:5]})
             out[method][name] = {"first": dist(firsts), "following": dist(following),
                                  "following_within": within(following), "following_raw": [round(v, 2) for v in following],
-                                 "valid_candidates_mean": round(statistics.mean(valid), 2)}
+                                 "valid_candidates_mean": round(statistics.mean(valid), 2), "samples": samples}
+            if hits:
+                out[method][name].update(hit_at_1=round(statistics.mean(h[0] for h in hits), 3),
+                                         hit_at_5=round(statistics.mean(h[1] for h in hits), 3),
+                                         hit_inputs=len(hits))
             print(json.dumps({"suggest": method, "case": name,
-                              **{k: v for k, v in out[method][name].items() if k != "following_raw"}}), flush=True)
+                              **{k: v for k, v in out[method][name].items() if k not in ("following_raw", "samples")}}),
+                  flush=True)
     return out
 
 
