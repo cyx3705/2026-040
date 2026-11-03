@@ -60,6 +60,8 @@
     "testConnectionBrowser": "node b-Code-Reader/tests/connection_browser.cjs",
     "testNetwork": "uv run --project b-Code-Echo python -m unittest discover -s b-Code-Echo/tests -p test_web_access.py",
     "testYouTubeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs",
+    "testYouTubeNavigationBrowser": "node b-Code-YouTube/tests/navigation_browser.cjs",
+    "testReaderPerformanceLive": "uv run --project b-Code-Echo python b-Code-Echo/tests/reader_performance.py --live",
     "testYouTubeUI": "node b-Code-YouTube/tests/timeline_core.cjs",
     "testYouTubeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live",
     "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1",
@@ -79,7 +81,7 @@
     {
       "id": "browser-extension",
       "path": "b-Code-Reader/extension",
-      "purpose": "ARCH-002 / WEB-001～009 / YT-001～013 / NET-001：统一 Edge/Chrome MV3 网页与 YouTube 字幕伴读；一个连接设置、学习广播和有界后台队列；闲置断线重连，保留完成释义，仅重试中断段落/字幕；YT-007 弹窗补注入升级前已打开页面的字幕脚本；YT-008 字幕统一使用网页后台协议，兼容旧后台并保留翻译连接错误；WEB-008 标熟/恢复已有释义只改显示，拒绝过期学习轮询，未翻译出现位置仅补原分块；YT-011 列表页点击进入视频自动翻译，排除悬停预览播放器；YT-012 通过 youtube-player.js 在页面与隔离世界共用活动 Shorts 播放器选择，竖屏布局与切换/返回缓存复用；WEB-009 词典缺词由当前模型按上下文补译，标注来源，升级刷新旧缺词缓存；YT-013 竖屏自动开启字幕、切换和重置后恢复，关闭 Echo 时停止"
+      "purpose": "ARCH-002 / WEB-001～009 / YT-001～015 / NET-001：统一 Edge/Chrome MV3 网页与 YouTube 字幕伴读；一个连接设置、学习广播和有界后台队列；闲置断线重连，保留完成释义，仅重试中断段落/字幕；YT-007 弹窗补注入升级前已打开页面的字幕脚本；YT-008 字幕统一使用网页后台协议，兼容旧后台并保留翻译连接错误；WEB-008 标熟/恢复已有释义只改显示，拒绝过期学习轮询，未翻译出现位置仅补原分块；YT-011 列表页点击进入视频自动翻译，排除悬停预览播放器；YT-012 通过 youtube-player.js 在页面与隔离世界共用活动 Shorts 播放器选择，竖屏布局与切换/返回缓存复用；WEB-009 词典缺词由当前模型按上下文补译，标注来源，升级刷新旧缺词缓存；YT-013 竖屏自动开启字幕、切换和重置后恢复，关闭 Echo 时停止；YT-014 首页首次 SPA 进入普通视频后自动选择英文 CC、响应延迟播放器事件，字幕选义单请求逐词回填；YT-015 监听用户从关闭到开启原生 CC，自动唤醒 Echo 并恢复翻译"
     }
   ],
   "externalDependencies": [
@@ -115,7 +117,7 @@
     },
     {
       "name": "Edge / Chrome Manifest V3",
-      "purpose": "只加载 b-Code-Reader/extension（0.7.2）；统一网页自动伴读与 YouTube 交替字幕/预取，NET-001 共用主机地址/密钥，模型和学习库保持一份"
+      "purpose": "只加载 b-Code-Reader/extension（0.7.4）；统一网页自动伴读与 YouTube 交替字幕/预取，NET-001 共用主机地址/密钥，模型和学习库保持一份"
     },
     {
       "name": "Playwright + 已安装 Microsoft Edge（仅扩展验收）",

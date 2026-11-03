@@ -3,7 +3,7 @@
 (() => {
   if (globalThis.__echoYouTube) return;
   const CORE = globalThis.EchoYouTubeTimeline;
-  let enabled = false, ready = false, leadFrames = 12, fps = 30, generation = 0, serial = 0;
+  let enabled = false, ready = false, leadFrames = 12, fps = 30, generation = 0, serial = 0, autoStartAllowed = true;
   let videoId = '', cues = [], track = '', source = 'waiting', lastError = '', translationError = '', port;
   let player, media, frame, lastFrame, tickTimer, probeTimer, learnedTimer;
   let current = null, host, shadow, nativeStyle;
@@ -390,7 +390,13 @@
   }
   window.addEventListener('message', event => {
     const data = event.data;
-    if (!enabled || event.source !== window || event.origin !== location.origin || data?.source !== 'echo-youtube-page') return;
+    if (event.source !== window || event.origin !== location.origin || data?.source !== 'echo-youtube-page') return;
+    if (data.kind === 'captions-started') {
+      if (!enabled && autoStartAllowed) start();
+      if (!enabled) return;
+      tick(); probe(); void syncLearned();
+    }
+    if (!enabled) return;
     // The page world may report the new video before the next tick notices the URL change.
     if (data.videoId !== videoId && data.videoId === idNow()) tick();
     if (data.videoId !== videoId) return;
@@ -403,7 +409,10 @@
     if (area !== 'local') return;
     if (changes.connection && enabled) { stop(); start(); }
     if (changes.leadFrames) leadFrames = Math.max(1, Math.min(120, Number(changes.leadFrames.newValue) || 12));
-    if (changes.enabled) { if (changes.enabled.newValue === false) stop(); else start(); }
+    if (changes.enabled) {
+      autoStartAllowed = changes.enabled.newValue !== false;
+      if (changes.enabled.newValue === false) stop(); else start();
+    }
     tick();
   });
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
@@ -419,8 +428,14 @@
   window.addEventListener('pagehide', flush);
   window.addEventListener('pageshow', wake);
   window.addEventListener('online', wake);
+  // A home page has no player at script injection. SPA navigation installs
+  // the watch player and its APIs later, without rerunning content scripts.
+  for (const name of ['yt-navigate-finish', 'yt-player-updated']) document.addEventListener(name, () => {
+    if (enabled) { tick(); probe(); }
+  });
   globalThis.__echoYouTube = {snapshot, start, stop};
   chrome.storage.local.get({enabled: true, leadFrames: 12}).then(settings => {
+    autoStartAllowed = settings.enabled !== false;
     leadFrames = Math.max(1, Math.min(120, Number(settings.leadFrames) || 12));
     if (settings.enabled) start();
   });

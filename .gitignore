@@ -100,3 +100,8 @@ Thumbs.db
 !z-*/
 !z-*/**
 # HistoryJanus managed end
+
+# z-学习数据：user.db 纳入 git；SQLite 运行时的临时日志不入库
+z-学习数据/*-journal
+z-学习数据/*-wal
+z-学习数据/*-shm

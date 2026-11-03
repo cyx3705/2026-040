@@ -15,8 +15,10 @@ ENGINE_LOG = DATA_DIR / "engine.log"
 # ECDICT（MIT）：setup 时下载 CSV，转成 SQLite 供离线查词。
 DICT_CSV_URL = "https://raw.githubusercontent.com/skywind3000/ECDICT/master/ecdict.csv"
 DICT_DB = DATA_DIR / "dict" / "ecdict.db"
-# 用户自己的数据（学会的词）。
-USER_DB = DATA_DIR / "user.db"
+# 用户自己的数据（学会的词、对话历史、单词表、设置）是长期资产，放仓内 z 级文件夹、纳入 git；
+# DATA_DIR 里只剩删了能重建的东西（词典、内核构建、上下文缓存、日志）。ECHO_USER_DB 可临时改指别处。
+REPO_ROOT = Path(__file__).resolve().parents[3]
+USER_DB = Path(os.environ.get("ECHO_USER_DB") or REPO_ROOT / "z-学习数据" / "user.db")
 
 # Retired native source utilities retain these paths for offline inspection.
 # The app never reads model files, launches this adapter, or contacts old ports.

@@ -5,6 +5,7 @@
   const nativeFetch = window.fetch;
   let enabled = false, controller, trackKey = '', lastAttempt = 0, captionTimer;
   const captionAttempts = new WeakMap();
+  const captionStates = new WeakMap();
   // YT-010: SPA navigation can fetch the new video's track before the isolated
   // world sees the new URL. Keep recent tracks by their own v= so a late request
   // still gets them; the native player won't fetch the same track again.
@@ -12,15 +13,48 @@
   const videoId = () => location.pathname === '/watch' ? new URL(location.href).searchParams.get('v') :
     location.pathname.match(/^\/shorts\/([^/]+)/)?.[1];
   const emit = (id, data) => window.postMessage({source: 'echo-youtube-page', videoId: id, ...data}, location.origin);
+  function watchNativeCaptions() {
+    const id = videoId();
+    if (!id) return;
+    try {
+      const player = globalThis.EchoYouTubePlayer.select(id);
+      if (!player || player.matches('.ad-showing,.ad-interrupting')) return;
+      const response = player.getPlayerResponse?.();
+      if (response?.videoDetails?.videoId && response.videoDetails.videoId !== id) return;
+      const selected = player.getOption?.('captions', 'track');
+      const list = response?.captions?.playerCaptionsTracklistRenderer?.captionTracks ||
+        player.getOption?.('captions', 'tracklist') || [];
+      const english = Array.isArray(list) ? list.filter(track => /^en(?:-|$)/i.test(track.languageCode || '')) : [];
+      if (!english.length) return;
+      const track = english.find(item => item.vssId === selected?.vssId) ||
+        english.find(item => item.kind !== 'asr') || english[0];
+      const button = player.querySelector('.ytp-subtitles-button[aria-pressed]');
+      const nativeState = player.isSubtitlesOn?.();
+      const on = typeof nativeState === 'boolean' ? nativeState :
+        button ? button.getAttribute('aria-pressed') === 'true' : undefined;
+      if (typeof on !== 'boolean') return;
+      const previous = captionStates.get(player);
+      captionStates.set(player, {id, on});
+      // Seed state on first observation. A pre-enabled player is not a user
+      // action; only a false -> true transition wakes the isolated world.
+      if (!previous || previous.id !== id) return;
+      if (!previous.on && on && (!selected?.languageCode || /^en(?:-|$)/i.test(selected.languageCode))) {
+        emit(id, {kind: 'captions-started', language: 'en'});
+      }
+    } catch { /* Player API may be unavailable during SPA transitions. */ }
+  }
+  function startCaptionWatch() {
+    // State changes are delivered by the button click, aria mutation, and
+    // YouTube's player lifecycle events below. Avoid polling player APIs on
+    // the playback thread; real videos can expose expensive player methods.
+    watchNativeCaptions();
+  }
   function ensureCaptions() {
     const id = videoId();
     if (!enabled || !id) return;
     try {
-      const player = globalThis.EchoYouTubePlayer.select(id), media = player?.querySelector('video');
+      const player = globalThis.EchoYouTubePlayer.select(id);
       if (!player || player.matches('.ad-showing,.ad-interrupting')) return;
-      const bounds = player.getBoundingClientRect();
-      if (!location.pathname.startsWith('/shorts/') && bounds.height <= bounds.width &&
-          !(media?.videoHeight > media?.videoWidth && media.videoWidth > 0)) return;
       const response = player.getPlayerResponse?.();
       if (response?.videoDetails?.videoId && response.videoDetails.videoId !== id) return;
       const button = player.querySelector('.ytp-subtitles-button[aria-pressed]');
@@ -33,6 +67,10 @@
         player.getOption?.('captions', 'tracklist') || [];
       const english = Array.isArray(list) ? list.filter(track => /^en(?:-|$)/i.test(track.languageCode || '')) : [];
       const track = english.find(track => track.vssId === selected?.vssId) || english.find(track => track.kind !== 'asr') || english[0];
+      // A cold home -> watch navigation may have no signed timedtext request
+      // until the site's own CC machinery selects English. The unsigned
+      // metadata URL can return an empty body on landscape videos too.
+      if (!track) return;
       const on = isOn();
       if (on === true && (!track || selected?.vssId === track.vssId)) return;
       if (on === undefined && selected?.languageCode && (!track || selected.vssId === track.vssId)) return;
@@ -148,5 +186,18 @@
       if (!captionTimer) captionTimer = setInterval(ensureCaptions, 1000);
       void request();
     }
+  });
+  // The page can be entered from the home feed with Echo disabled and the
+  // player created later. Keep this lightweight watcher alive independently
+  // of the translation bridge so a manual CC click can wake Echo.
+  startCaptionWatch();
+  document.addEventListener('click', event => {
+    if (event.target?.closest?.('.ytp-subtitles-button')) setTimeout(watchNativeCaptions, 0);
+  }, true);
+  const captionObserver = new MutationObserver(() => watchNativeCaptions());
+  captionObserver.observe(document.documentElement, {subtree: true, attributes: true, attributeFilter: ['aria-pressed']});
+  for (const name of ['yt-navigate-finish', 'yt-player-updated']) document.addEventListener(name, () => {
+    watchNativeCaptions();
+    if (enabled) { ensureCaptions(); void request(); }
   });
 })();

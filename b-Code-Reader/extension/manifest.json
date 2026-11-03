@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Echo 英语伴读",
-  "version": "0.7.2",
+  "version": "0.7.4",
   "description": "网页与 YouTube 字幕统一伴读，自动恢复闲置连接，共用 Echo 主机与学习记录。",
   "permissions": [
     "storage",

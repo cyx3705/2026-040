@@ -5,11 +5,66 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, Mock, patch
 from echo_app import reader
+from echo_app.kv import SequenceHandle
 
 
 class ReaderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_shared_reader_publishes_each_word_without_tokenize_round_trips(self):
+        d, e = self.dictionary(), self.engine()
+        released = []
+        shared = Mock()
+        @asynccontextmanager
+        async def sequence(model, prompt):
+            try:
+                yield SequenceHandle('a', 'epoch', 100)
+            finally:
+                released.append(True)
+        shared.sequence = sequence
+        shared.select_text = AsyncMock(return_value=[{'label':' B','decision_steps':1,
+            'shared_prefix_tokens':100,'replayed_tokens':0}])
+        with patch.object(reader,'shared_available',AsyncMock(return_value=shared)):
+            stream = reader.events('bank bank',d,e,'m','chatml')
+            await anext(stream)  # dictionary before model work
+            first = await anext(stream)
+            self.assertEqual(first['items'][0]['gloss'],'岸')
+            self.assertEqual(shared.select_text.await_count,1)
+            second = await anext(stream)
+            self.assertEqual(second['items'][0]['start'],5)
+            self.assertEqual(shared.select_text.await_count,2)
+            self.assertTrue((await anext(stream))['done'])
+            await stream.aclose()
+        shared.tokenize.assert_not_called()
+        shared.select.assert_not_called()
+        self.assertEqual(released,[True])
+        prefix,suffix = shared.select_text.call_args.args[1:3]
+        self.assertIn('bank bank',prefix)  # reader preserves full right context
+        self.assertIn('银行',suffix)
+        self.assertIn('岸',suffix)
+
+    async def test_shared_reader_cancel_mid_selection_releases_source(self):
+        d,e = self.dictionary(),self.engine()
+        entered = asyncio.Event()
+        released = []
+        shared = Mock()
+        @asynccontextmanager
+        async def sequence(*args):
+            try: yield SequenceHandle('a','epoch',100)
+            finally: released.append(True)
+        async def select(*args):
+            entered.set()
+            await asyncio.Event().wait()
+        shared.sequence = sequence
+        shared.select_text = AsyncMock(side_effect=select)
+        with patch.object(reader,'shared_available',AsyncMock(return_value=shared)):
+            task = asyncio.create_task(self.collect(d,e))
+            await entered.wait()
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError): await task
+        self.assertEqual(released,[True])
+
     def dictionary(self, learned=()):
         d = Mock()
         d.learned_lemmas.return_value = set(learned)
