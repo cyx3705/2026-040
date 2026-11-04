@@ -70,7 +70,7 @@ internal sealed class RatioInference(ICommandBus bus) : IInference
 
     private static string Q(JsonNode node) => CommandParser.QuoteArg(node.ToJsonString(Json.Options));
 
-    private async Task<JsonObject> CallAsync(string command, CancellationToken cancellation)
+    private async Task<JsonObject> CallAsync(string command, CancellationToken cancellation, bool dataRequired = true)
     {
         var result = await bus.InvokeAsync(command, "", cancellation).ConfigureAwait(false);
         if (!result.Success)
@@ -83,7 +83,8 @@ internal sealed class RatioInference(ICommandBus bus) : IInference
             throw new InferenceException(message);
         }
 
-        return DataOf(result) as JsonObject ?? throw new InferenceException($"{command.Split(' ')[0]} 回执没有 JSON 对象");
+        return DataOf(result) as JsonObject
+               ?? (dataRequired ? throw new InferenceException($"{command.Split(' ')[0]} 回执没有 JSON 对象") : new JsonObject());
     }
 
     /// <summary>回执 Data：模块指令给的是 JSON 文本，宿主指令给的是 JsonElement。</summary>
@@ -178,7 +179,8 @@ internal sealed class RatioInference(ICommandBus bus) : IInference
     }
 
     public async Task CloseSequenceAsync(SequenceHandle sequence)
-        => await CallAsync($"ratio.seq.close sequence={Q(sequence.Id)} epoch={Q(sequence.Epoch)}", CancellationToken.None).ConfigureAwait(false);
+        => await CallAsync($"ratio.seq.close sequence={Q(sequence.Id)} epoch={Q(sequence.Epoch)}", CancellationToken.None, dataRequired: false)
+            .ConfigureAwait(false);
 
     private async IAsyncEnumerable<string> ReadStreamAsync(JsonObject opened, [EnumeratorCancellation] CancellationToken cancellation, bool kv = false)
     {

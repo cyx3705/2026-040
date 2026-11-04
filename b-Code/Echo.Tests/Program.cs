@@ -239,6 +239,7 @@ static async Task TestRatioCommandsAsync()
         "ratio.stream.read" when text.Contains("after=0") => CommandResult.Ok("", """{"text":"He","next":2,"done":false,"error":null}"""),
         "ratio.stream.read" => CommandResult.Ok("", """{"text":"llo","next":5,"done":true,"error":null}"""),
         "ratio.seq.open" => CommandResult.Fail("shared_kv:invalid_sequence_size"),
+        "ratio.seq.close" => CommandResult.Ok("序列已释放"),
         "ratio.chat.send" => CommandResult.Ok("", """{"content":"{\"label\":\"A\"}","finishReason":"stop"}"""),
         _ => CommandResult.Fail("unknown"),
     });
@@ -253,6 +254,7 @@ static async Task TestRatioCommandsAsync()
     Equal("Hello", text.ToString());
     True(CommandParser.Parse(bus.Commands[1]).Named["think"] == "false", "对话要关思考");
     var kv = await ThrowsAsync<KvUnsupportedException>(() => inference.OpenSequenceAsync("m", "p", CancellationToken.None));
+    await inference.CloseSequenceAsync(new SequenceHandle("a1", "e", 3)); // 释放回执不带 Data，不能当失败
     Equal("invalid_sequence_size", kv.Message);
     var answer = await inference.AskAsync("m", "q", 40, new JsonObject { ["type"] = "object" }, 0, CancellationToken.None);
     Equal("{\"label\":\"A\"}", answer);
