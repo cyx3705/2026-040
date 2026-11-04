@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$OutputDirectory, [switch]$InputOnly)
+﻿param([Parameter(Mandatory=$true)][string]$OutputDirectory, [switch]$InputOnly)
 $ErrorActionPreference = 'Stop'
 $source = $PSScriptRoot
 $out = [IO.Path]::GetFullPath($OutputDirectory)

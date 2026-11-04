@@ -11,12 +11,17 @@
     "title": "Echo：逐词辅助的英语 AI 对话",
     "kind": [
       "application",
-      "local-ai"
+      "local-ai",
+      "appshell-module"
     ],
-    "status": "developing"
+    "status": "developing",
+    "version": "0.1.1",
+    "branch": "main"
   },
   "paths": {
     "activeRoots": [
+      "b-Code/Echo",
+      "b-Code/Echo.Tests",
       "b-Office",
       "b-Code",
       "b-Code-Echo",
@@ -24,6 +29,8 @@
       "b-Code-YouTube"
     ],
     "sourceRoots": [
+      "b-Code/Echo",
+      "b-Code/Echo.Tests",
       "b-Code",
       "b-Code-Echo",
       "b-Code-Reader",
@@ -31,13 +38,21 @@
     ],
     "generatedRoots": [
       "b-Office/technical-report/output",
-      "b-Office/technical-report/tmp"
+      "b-Office/technical-report/tmp",
+      "b-Code/**/bin",
+      "b-Code/**/obj",
+      "z-Publish"
     ],
-    "archiveRoots": [],
+    "archiveRoots": [
+      "z-Publish/history"
+    ],
     "allowedRootDirectoryPrefixes": [
       "a-",
       "b-",
       "z-"
+    ],
+    "releaseRoots": [
+      "z-Publish"
     ]
   },
   "documents": {
@@ -50,7 +65,7 @@
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
     "run": "uv run --project b-Code-Echo echo-serve",
     "runShared": "uv run --project b-Code-Echo echo-serve --share",
-    "package": null,
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Echo\\eng\\Build-EchoPackage.ps1",
     "testKernel": "uv run --project b-Code-Echo echo-build-input --test",
     "testSuggestUI": "node b-Code-Echo/tests/suggest_queue.cjs",
     "testInputUI": "node b-Code-Echo/tests/composer_input.cjs",
@@ -144,5 +159,32 @@
     "**/.vs/**",
     "**/.venv/**",
     "artifacts/**"
-  ]
+  ],
+  "publish": {
+    "versionProps": "b-Code\\Echo\\EchoVersion.props",
+    "versionProperty": "EchoVersion",
+    "sourceManifest": "b-Code\\Echo\\module.manifest.json",
+    "package": {
+      "project": "b-Code\\Echo\\Echo.csproj",
+      "files": [
+        "Echo.dll",
+        "Echo.xml",
+        "module.manifest.json"
+      ]
+    },
+    "validation": [
+      {
+        "tool": "dotnet.exe",
+        "arguments": [
+          "run",
+          "--project",
+          "b-Code\\Echo.Tests\\Echo.Tests.csproj",
+          "-c",
+          "Release",
+          "-p:NuGetAudit=false"
+        ],
+        "description": "Run Echo offline tests"
+      }
+    ]
+  }
 }

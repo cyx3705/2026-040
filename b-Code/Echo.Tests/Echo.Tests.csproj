@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>Echo.Tests</AssemblyName>
+    <RootNamespace>Echo.Tests</RootNamespace>
+    <HistoryVulcanPackageRoot Condition="'$(HistoryVulcanPackageRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..\2026-023-HistoryVulcan\z-Publish</HistoryVulcanPackageRoot>
+    <HistoryVulcanHostRoot Condition="'$(HistoryVulcanHostRoot)' == ''">$(HistoryVulcanPackageRoot)\host</HistoryVulcanHostRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Echo\Echo.csproj" />
+    <!-- 模块工程把宿主运行库设成 Private=false（部署时由宿主提供）。
+         测试是独立可执行文件，没有宿主给它，所以这里必须自己带一份。
+         只引用契约程序集 Core：装载冒烟走宿主命令行的 probe 开关，不引用宿主实现程序集（宿主 5.9.0 统一契约）。 -->
+    <Reference Include="HistoryVulcan.Core">
+      <HintPath>$(HistoryVulcanHostRoot)\HistoryVulcan.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 装载冒烟要找到同一份宿主的 HistoryVulcan.Cli.exe；管线在工作区里会传 HistoryVulcanPackageRoot。 -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>HistoryVulcanHostRoot</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(HistoryVulcanHostRoot)'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

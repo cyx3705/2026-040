@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="EchoVersion.props" />
+
+  <PropertyGroup>
+    <!--
+      net8.0-windows 与宿主一致；纯逻辑模块也可以用 net8.0。
+      模块本身不画界面：页面走 Aurora 描述协议（见 EchoPage.cs），不要引用 WPF。
+    -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>Echo</AssemblyName>
+    <RootNamespace>Echo</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**\bin\**;**\obj\**</DefaultItemExcludes>
+    <!-- 假定本仓与 2026-023-HistoryVulcan 在同一库根下；F 盘工作区由 Directory.Build.user.props 覆盖。 -->
+    <HistoryVulcanPackageRoot Condition="'$(HistoryVulcanPackageRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..\2026-023-HistoryVulcan\z-Publish</HistoryVulcanPackageRoot>
+    <HistoryVulcanHostRoot Condition="'$(HistoryVulcanHostRoot)' == ''">$(HistoryVulcanPackageRoot)\host</HistoryVulcanHostRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 宿主运行库一律 Private=false：部署时由宿主提供，包里不带副本。 -->
+    <Reference Include="HistoryVulcan.Core">
+      <HintPath>$(HistoryVulcanHostRoot)\HistoryVulcan.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="module.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

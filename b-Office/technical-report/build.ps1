@@ -1,4 +1,4 @@
-# REPORT-001: build the editable manuscript, PDF, and standalone TeX archive.
+﻿# REPORT-001: build the editable manuscript, PDF, and standalone TeX archive.
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'

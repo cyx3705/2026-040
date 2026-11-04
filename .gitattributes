@@ -1,5 +1,12 @@
 # LFS 规则：不到 100MB 的文件一律不走 LFS。
-# ≥100MB 的具体文件由下面的 HistoryJanus lfs 托管块逐条列出，其余行不得出现 filter=lfs。
+# ≥100MB 的具体文件由 HistoryJanus lfs 托管块逐条列出，其余行不得出现 filter=lfs。
 * text=auto
 
 Logo.png -text
+*.png -text
+*.dll -text
+
+# 发布包的 SHA256SUMS 覆盖精确字节，Git 不得规范化包内容。
+# 缺这一条时，快照里的文本文件入库被规范、签出又被转换，主树快照永远与 SHA256SUMS 不符，
+# finish 热装因此失败（HistoryJuno / HistoryApollo 2026-09-28 的教训）。
+z-Publish/** binary
