@@ -147,6 +147,7 @@ internal sealed partial class EchoApp
             }
             catch (Exception ex) when (ex is InferenceException or JsonException or InvalidOperationException or FormatException)
             {
+                Log($"输入翻译选词失败：{ex.GetType().Name}: {ex.Message}");
                 return Result(null, "selector_failure");
             }
             finally
