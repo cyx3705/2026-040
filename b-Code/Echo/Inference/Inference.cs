@@ -63,6 +63,9 @@ internal sealed class RatioInference(ICommandBus bus) : IInference
 {
     private const string Provider = "local";
 
+    /// <summary>流式生成多久没有新正文就判为卡住。</summary>
+    internal static TimeSpan StallLimit { get; set; } = TimeSpan.FromMinutes(2);
+
     private static string Q(string value) => CommandParser.QuoteArg(value);
 
     private static string Q(JsonNode node) => CommandParser.QuoteArg(node.ToJsonString(Json.Options));
@@ -182,12 +185,19 @@ internal sealed class RatioInference(ICommandBus bus) : IInference
         var id = opened["stream"]?.GetValue<string>() ?? throw new InferenceException("开流回执没有 stream 编号");
         var after = 0;
         var finished = false;
+        var progressed = DateTime.UtcNow;
         try
         {
             while (true)
             {
+                // 服务卡住时不无限等：两分钟没有新正文就放弃（与旧版 120 秒读超时一致），流随即取消。
+                if (DateTime.UtcNow - progressed > StallLimit)
+                    throw kv ? new KvUnsupportedException("stream_stalled") : new InferenceException("推理服务两分钟没有新输出，已放弃这一轮");
                 var chunk = await CallAsync($"ratio.stream.read stream={id} after={after} wait=5000", cancellation).ConfigureAwait(false);
-                after = chunk["next"]?.GetValue<int>() ?? after;
+                var next = chunk["next"]?.GetValue<int>() ?? after;
+                if (next != after)
+                    progressed = DateTime.UtcNow;
+                after = next;
                 var text = chunk["text"]?.GetValue<string>();
                 if (!string.IsNullOrEmpty(text))
                     yield return text;

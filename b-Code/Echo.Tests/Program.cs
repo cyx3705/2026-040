@@ -31,6 +31,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("prompt templates", Sync(TestTemplates)),
     ("suggest filters tokens", TestSuggestAsync),
     ("ratio commands quoted", TestRatioCommandsAsync),
+    ("stalled stream gives up", TestStalledStreamAsync),
     ("static index versioned", Sync(TestIndex)),
     ("http status and models", TestHttpStatusAsync),
     ("http suggest and lookup", TestHttpSuggestAsync),
@@ -256,6 +257,34 @@ static async Task TestRatioCommandsAsync()
     var answer = await inference.AskAsync("m", "q", 40, new JsonObject { ["type"] = "object" }, 0, CancellationToken.None);
     Equal("{\"label\":\"A\"}", answer);
     True(CommandParser.Parse(bus.Commands[^1]).Named.ContainsKey("schema"), "带 schema");
+}
+
+static async Task TestStalledStreamAsync()
+{
+    var bus = new FakeBus(text => text.Split(' ')[0] switch
+    {
+        "ratio.chat.stream" => CommandResult.Ok("", """{"stream":"s1"}"""),
+        "ratio.stream.read" => CommandResult.Ok("", """{"text":"","next":0,"done":false,"error":null}"""),
+        _ => CommandResult.Ok("", "{}"),
+    });
+    var old = RatioInference.StallLimit;
+    RatioInference.StallLimit = TimeSpan.FromMilliseconds(200);
+    try
+    {
+        var error = await ThrowsAsync<InferenceException>(async () =>
+        {
+            await foreach (var _ in new RatioInference(bus).ChatAsync("m", null, [new ChatTurn("user", "x")], 8, CancellationToken.None))
+            {
+            }
+        });
+        True(error.Message.Contains("两分钟"), error.Message);
+        await Task.Delay(50);
+        True(bus.Commands.Any(c => c.StartsWith("ratio.stream.cancel stream=s1", StringComparison.Ordinal)), "放弃时要取消流");
+    }
+    finally
+    {
+        RatioInference.StallLimit = old;
+    }
 }
 
 static void TestIndex()
