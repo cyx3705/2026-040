@@ -77,7 +77,7 @@ internal static class EchoPage
                                     widgets = new object[]
                                     {
                                         new { kind = "textbox", id = "query", label = "搜索", channel = SearchChannel, value = "", flex = true },
-                                        new { kind = "button", action = NewActionId, text = "新对话", icon = "plus" },
+                                        new { kind = "button", action = NewActionId, text = "新对话" },
                                         new { kind = "button", action = DeleteActionId, text = "删除", enabledWhen = new { selected = ConversationChannel } },
                                     },
                                 },
