@@ -46,7 +46,9 @@ internal sealed partial class EchoApp
                     await Send(new JsonObject()).ConfigureAwait(false);
                     var model = CurrentModel;
                     var template = await TemplateAsync(model, token).ConfigureAwait(false);
+                    Log($"TRACE chat template {template}");
                     var shared = template is not null && (await Inference.CapabilitiesAsync(model, token).ConfigureAwait(false)).Supported;
+                    Log($"TRACE chat shared {shared}");
                     if (shared)
                     {
                         try
@@ -119,7 +121,9 @@ internal sealed partial class EchoApp
     {
         var sourcePrompt = Prompts.AssistantPrompt(template, system, prompt);
         using var lease = await Gate.RequestAsync(token).ConfigureAwait(false);
+        Log("TRACE chat lease");
         var sequence = await Inference.OpenSequenceAsync(model, sourcePrompt, token).ConfigureAwait(false);
+        Log($"TRACE chat open {sequence.Id}");
         var context = new SharedContext(sequence, sourcePrompt, template);
         var processed = new HashSet<int>();
         var remaining = 8;
@@ -187,6 +191,7 @@ internal sealed partial class EchoApp
             await foreach (var text in Inference.SequenceChatAsync(sequence, 1024, token).ConfigureAwait(false))
             {
                 reply.Append(text);
+                Log($"TRACE chat delta {reply.Length}");
                 await send(new JsonObject { ["delta"] = text }).ConfigureAwait(false);
                 Schedule(false);
                 await Drain(false).ConfigureAwait(false);
