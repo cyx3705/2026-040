@@ -1,3 +1,4 @@
+using Echo.Board;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
@@ -43,6 +44,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("http input origin check", TestHttpInputOriginAsync),
     ("share key", Sync(TestShareKey)),
     ("input bridge sources", Sync(TestInputSources)),
+    ("aurora page contract", Sync(TestAuroraPage)),
+    ("aurora board chat", TestBoardChatAsync),
     ("host loads the package", TestHostLoadsPackage),
 };
 
@@ -72,8 +75,11 @@ static Func<Task> Sync(Action test) => () =>
 static void TestCommandRegistration()
 {
     var registry = new Registrar();
-    EchoModule.Register(registry, new EchoService(new FakeBus(_ => CommandResult.Ok()), _ => { }));
-    string[] expected = ["app.status", "app.start", "app.stop", "app.open", "dict.setup", "input.build", "word.list", "word.learn"];
+    var bus = new FakeBus(_ => CommandResult.Ok());
+    var service = new EchoService(bus, _ => { });
+    EchoModule.Register(registry, service, new EchoBoard(service.AppAsync, bus, _ => { }));
+    string[] expected = ["app.status", "app.start", "app.stop", "app.open", "dict.setup", "input.build", "word.list", "word.learn",
+        "ui.describe", "ui.actions", "ui.data", "conv.list", "conv.show", "conv.new", "conv.delete", "chat.send", "chat.stop", "chat.level"];
     foreach (var name in expected)
     {
         True(registry.TryGet("echo." + name, out var d), $"未注册 echo.{name}");
@@ -84,6 +90,96 @@ static void TestCommandRegistration()
     Equal(expected.Length, registry.All.Count);
     True(registry.TryGet("echo.app.status", out var status) && status!.Readonly, "status 只读");
     True(registry.TryGet("echo.word.learn", out var learn) && !learn!.Readonly, "learn 改数据");
+    foreach (var name in new[] { "ui.describe", "ui.actions", "ui.data" })
+        True(registry.TryGet("echo." + name, out var ui) && ui!.Readonly && !string.IsNullOrEmpty(ui.HiddenReason), $"echo.{name} 要只读且隐藏");
+}
+
+static void TestAuroraPage()
+{
+    var registry = new Registrar();
+    var bus = new FakeBus(_ => CommandResult.Ok());
+    var service = new EchoService(bus, _ => { });
+    EchoModule.Register(registry, service, new EchoBoard(service.AppAsync, bus, _ => { }));
+    var page = JsonNode.Parse(EchoPage.Describe("A2"))!;
+    Equal(EchoIdentity.PageOwner, page["owner"]!.GetValue<string>());
+    Equal("History" + char.ToUpperInvariant(EchoIdentity.Domain[0]) + EchoIdentity.Domain[1..], EchoIdentity.PageOwner);
+    foreach (var p in page["pages"]!.AsArray())
+        Equal(EchoIdentity.PageOwner, p!["scene"]!.GetValue<string>());
+    Equal("left", page["pages"]![0]!["placement"]!["side"]!.GetValue<string>());
+    var actions = JsonNode.Parse(EchoPage.Actions())!["actions"]!.AsArray();
+    var ids = actions.Select(a => a!["id"]!.GetValue<string>()).ToHashSet();
+    foreach (var a in actions)
+        True(registry.TryGet(a!["command"]!.GetValue<string>(), out _), $"动作 {a["id"]} 指向未注册的指令");
+    // 页面里每个 action / commitAction 都要声明过
+    var text = EchoPage.Describe("A2");
+    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"(?:action|commitAction)\":\"([^\"]+)\""))
+        True(ids.Contains(m.Groups[1].Value), $"页面绑了未声明的动作 {m.Groups[1].Value}");
+    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"command\":\"([^\"]+)\""))
+        True(registry.TryGet(m.Groups[1].Value, out _), $"页面取数指令 {m.Groups[1].Value} 未注册");
+    True(EchoBoard.LevelRows().Any(r => r["value"] == "雅思 6.5"), "难度候选含雅思");
+    Equal("CET-4", EchoBoard.LevelLabel("cet:4"));
+}
+
+static async Task TestBoardChatAsync()
+{
+    using var ws = new Workspace();
+    var fake = new FakeInference { Reply = ["I went", " to the", " bank."], Label = labels => labels[1] };
+    fake.Answer = prompt => System.Text.RegularExpressions.Regex.Match(prompt, "\"occurrence_id\": \"(w[0-9]+)\"") is { Success: true } m
+        ? new JsonObject { [m.Groups[1].Value] = "A" }.ToJsonString() : "{}";
+    using var app = new EchoApp(ws.Paths, fake, _ => { });
+    var bus = new FakeBus(_ => CommandResult.Ok());
+    EchoBoard.Beat = TimeSpan.FromMilliseconds(20);
+    using var board = new EchoBoard(_ => Task.FromResult(app), bus, _ => { });
+
+    Equal("CET-4", await board.SetLevelAsync("CET-4", CancellationToken.None) ?? "");
+    Equal("cet:4", await board.LevelAsync(CancellationToken.None));
+    Equal(null, await board.SetLevelAsync("不存在", CancellationToken.None));
+
+    var id = await board.NewConversationAsync(CancellationToken.None);
+    Equal(id, await board.NewConversationAsync(CancellationToken.None));
+    var cards = await board.ConversationRowsAsync("", CancellationToken.None);
+    Equal(id.ToString(), cards[0]["id"]);
+    True(bus.Commands.Contains("aurora.ui.refreshdata node=" + EchoPage.ConversationListId), "新建后刷新会话卡片");
+
+    var finished = await board.SendAsync(id, "hi", CancellationToken.None);
+    var during = await board.MessageRowsAsync(id, CancellationToken.None);
+    Equal("out", during[0]["direction"]);
+    Equal("hi", during[0]["text"]);
+    Equal("I went to the bank.", await finished);
+    var rows = await board.MessageRowsAsync(id, CancellationToken.None);
+    Equal(2, rows.Count);
+    Equal("in", rows[1]["direction"]);
+    True(rows[1]["text"].StartsWith("I went to the bank.\n\n释义：", StringComparison.Ordinal), rows[1]["text"]);
+    True(rows[1]["text"].Contains("bank 银行"), rows[1]["text"]);
+    Equal("cet:4", app.Store.Get(id)!["level"]!.GetValue<string>());
+    True(bus.Commands.Contains("aurora.ui.refreshdata node=" + EchoPage.MessageListId), "说完刷新时间线");
+    await Task.Delay(100);
+    True(fake.Calls.Count(c => c == "chat") >= 2, "首轮说完自动起标题");
+
+    var again = await board.SendAsync(id, "and then?", CancellationToken.None);
+    await Expect<InvalidOperationException>(() => board.SendAsync(id, "too fast", CancellationToken.None));
+    await again;
+    Equal(4, (await board.MessageRowsAsync(id, CancellationToken.None)).Count);
+    await Expect<InvalidOperationException>(() => board.SendAsync(id, "  ", CancellationToken.None));
+
+    True(await board.DeleteAsync(id, CancellationToken.None), "删除");
+    Equal(null, app.Store.Get(id));
+    True(!await board.DeleteAsync(id, CancellationToken.None), "删两次");
+    Equal("", EchoBoard.GlossLine([new JsonObject { ["word"] = "go", ["gloss"] = "去", ["lemma"] = "go" }], new HashSet<string> { "go" }));
+}
+
+static async Task Expect<T>(Func<Task> body) where T : Exception
+{
+    try
+    {
+        await body();
+    }
+    catch (T)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException($"应抛 {typeof(T).Name}");
 }
 
 static void TestVersionsAgree()
@@ -480,7 +576,7 @@ static async Task TestHostLoadsPackage()
         using var probe = JsonDocument.Parse(output);
         var module = probe.RootElement.GetProperty("data").GetProperty("module");
         True(module.GetProperty("attached").GetBoolean(), "宿主没有接上模块：" + output);
-        Equal(8, module.GetProperty("commandCount").GetInt32());
+        Equal(18, module.GetProperty("commandCount").GetInt32());
         True(probe.RootElement.GetProperty("data").GetProperty("result").GetProperty("success").GetBoolean(), output);
     }
     finally

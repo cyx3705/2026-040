@@ -101,6 +101,10 @@ internal static class Levels
         return ById.ContainsKey(level) ? level : Default;
     }
 
+    /// <summary>扁平的难度候选（Aurora 选项框用）：id 与显示名，雅思带「雅思」前缀。</summary>
+    public static IEnumerable<(string Id, string Label)> Choices()
+        => Standards.SelectMany(s => s.Items.Select(l => (l.Id, s.Id == "ielts" ? "雅思 " + l.Name : l.Name)));
+
     public static JsonArray Catalog() => new(Standards.Select(s => (JsonNode)new JsonObject
     {
         ["id"] = s.Id,

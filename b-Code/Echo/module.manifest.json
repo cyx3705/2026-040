@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "type": "HistoryVulcan.Module",
   "name": "Echo",
-  "version": "0.4.0",
-  "description": "Echo 逐词辅助的英语 AI 对话：本机网页与伴读扩展的后端，推理经 Ratio",
+  "version": "0.5.0",
+  "description": "Echo 逐词辅助的英语 AI 对话：Aurora 页面与伴读扩展的后端，推理经 Ratio",
   "artifact": "Echo.dll",
   "docs": "Echo.xml",
   "mcpExposure": "standard",
-  "ui": false,
+  "ui": true,
   "pinned": false,
   "dependsOn": [
     "Ratio"

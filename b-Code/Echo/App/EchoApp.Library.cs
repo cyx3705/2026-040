@@ -95,7 +95,7 @@ internal sealed partial class EchoApp
     }
 
     /// <summary>自动命名：用当前模型按前几轮内容起个中文标题。已经起过的不再改。</summary>
-    private async Task<JsonObject> NameConversationAsync(long id, CancellationToken cancellation)
+    internal async Task<JsonObject> NameConversationAsync(long id, CancellationToken cancellation)
     {
         var conv = Store.Get(id) ?? throw new HttpError(404, "没有这段对话");
         if (conv["titled"]?.GetValue<bool>() == true)

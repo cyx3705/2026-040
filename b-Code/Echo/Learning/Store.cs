@@ -152,8 +152,17 @@ internal sealed class Store
         {
             if (q.Length == 0)
             {
-                foreach (var r in _con.Query("SELECT id, title, updated FROM conversations ORDER BY updated DESC LIMIT ?", limit))
-                    result.Add(new JsonObject { ["id"] = (long)r[0]!, ["title"] = (string)r[1]!, ["updated"] = Convert.ToDouble(r[2]), ["snippet"] = "" });
+                foreach (var r in _con.Query("SELECT id, title, updated,"
+                             + " (SELECT content FROM messages m WHERE m.conv_id = c.id ORDER BY seq DESC LIMIT 1)"
+                             + " FROM conversations c ORDER BY updated DESC LIMIT ?", limit))
+                {
+                    result.Add(new JsonObject
+                    {
+                        ["id"] = (long)r[0]!, ["title"] = (string)r[1]!, ["updated"] = Convert.ToDouble(r[2]), ["snippet"] = "",
+                        ["last"] = Clip(r[3] as string ?? "", 60),
+                    });
+                }
+
                 return result;
             }
 
@@ -177,6 +186,23 @@ internal sealed class Store
         }
 
         return result;
+    }
+
+    /// <summary>新对话：已有一段还没说过话的就挪到最前面复用，否则新建一段空对话。</summary>
+    public long NewConversation(string level)
+    {
+        lock (_con.Gate)
+        {
+            var empty = _con.QueryOne("SELECT id FROM conversations c WHERE NOT EXISTS (SELECT 1 FROM messages m WHERE m.conv_id = c.id)"
+                                      + " AND c.practice = '' ORDER BY updated DESC LIMIT 1");
+            if (empty is not null)
+            {
+                _con.Execute("UPDATE conversations SET updated = ?, level = ? WHERE id = ?", Now(), level, (long)empty[0]!);
+                return (long)empty[0]!;
+            }
+        }
+
+        return Save(null, [], level);
     }
 
     public void SetTitle(long id, string title)

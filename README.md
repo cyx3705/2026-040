@@ -2,10 +2,11 @@
 
 > 说不连贯英语也能和 AI 聊：AI 每个词带释义，你每个词有 AI 帮你接。
 
-Echo（2026-040）是 HistoryVulcan 的宿主模块（域 `echo`，0.4.0 起）。界面仍是自己的本机网页：宿主在跑，网页服务就在 `http://127.0.0.1:8040` 跑，浏览器扩展连同一个地址。推理一律经 Ratio 模块的指令（`provider=local`），Echo 不直连任何推理服务、不管模型进程。
+Echo（2026-040）是 HistoryVulcan 的宿主模块（域 `echo`）。界面在 Aurora 里：左边是会话历史，右边是气泡对话和发送栏。宿主在跑时，`http://127.0.0.1:8040` 也在跑，浏览器扩展连它，原来的网页也还能打开（输入预测、中文输入、点词学会在网页上）。推理一律经 Ratio 模块的指令（`provider=local`），Echo 不直连任何推理服务、不管模型进程。
 
 ## 能力与当前边界
 
+- Aurora 页面（`echo-history` / `echo-chat`）：会话卡片带搜索、新对话、删除；对话气泡边生成边显示，说完在 AI 那句下面附「释义：词 中文 · …」；可选难度、可停止。指令 `echo.conv.list/show/new/delete`、`echo.chat.send/stop/level`，AI 也能直接调。
 - 英语对话、难度 A1～C2+/国内考试/雅思档位、回答长度、对话历史与搜索、自动中文标题、Word 单词表练词。
 - 对话流式输出英文；每说完一个词就选取中文释义。服务支持共享 KV 时，A 在服务里持续生成，每个词在 A 上分叉 B 选义（`ratio.seq.*`），否则说完后用 JSON Schema 约束的普通请求逐词选义。每轮最多 8 个多义词，超出或失败保留带退化标记的词典释义。断流未完成时不保存半截回复。
 - 输入预测按用户回合读取下一 token 前 20 个候选（`ratio.local.probs`），经词典过滤/去重、半词补全后显示 1～20 个候选；45 秒等不到算超时。
@@ -16,7 +17,7 @@ Echo（2026-040）是 HistoryVulcan 的宿主模块（域 `echo`，0.4.0 起）�
 
 - 前提：HistoryVulcan 宿主 6.0+、Ratio 0.8.0+（`dependsOn`）、本机推理服务（`ratio.local.start`）。
 - 首次准备离线词典：控制台执行 `echo.dict.setup`（ECDICT，分段续传）。中文输入桥需 VS C++ Build Tools x64 + Windows SDK，首次使用时自动编译，也可先执行 `echo.input.build`。
-- 打开页面：`echo.app.open`，或浏览器直接访问 `http://127.0.0.1:8040`。`echo.app.status` 看网页服务、数据位置与推理状态；`echo.app.stop` / `echo.app.start` 手动停起。
+- 打开页面：进 Aurora 的 HistoryEcho 场景；旧网页用 `echo.app.open` 或浏览器访问 `http://127.0.0.1:8040`。`echo.app.status` 看网页服务、数据位置与推理状态；`echo.app.stop` / `echo.app.start` 手动停起。
 - 数据：学习数据（学会的词、对话、单词表、设置）在仓内 `z-学习数据/user.db`（`ECHO_USER_DB` 可改）；可重建数据（词典、输入桥构建、伴读上下文）在 `ECHO_DATA_DIR`，缺省 `%USERPROFILE%\.echo`。端口 `ECHO_WEB_PORT`，`ECHO_AUTOSTART=0` 时宿主启动不自动起网页服务。
 
 ## 浏览器扩展与多设备

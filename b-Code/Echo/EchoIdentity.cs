@@ -19,5 +19,5 @@ internal static class EchoIdentity
     public const string PageTitle = "Echo";
 
     /// <summary>模块一句话描述，与 module.manifest.json 的 description 保持一致。</summary>
-    public const string Description = "Echo 逐词辅助的英语 AI 对话：本机网页与伴读扩展的后端，推理经 Ratio";
+    public const string Description = "Echo 逐词辅助的英语 AI 对话：Aurora 页面与伴读扩展的后端，推理经 Ratio";
 }

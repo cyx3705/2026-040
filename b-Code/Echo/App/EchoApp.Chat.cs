@@ -15,22 +15,33 @@ internal sealed partial class EchoApp
     private async Task ChatAsync(EchoRequest request)
     {
         var body = await request.JsonAsync().ConfigureAwait(false);
+        var sse = new SseWriter(request.Response);
+        using var aborted = CancellationTokenSource.CreateLinkedTokenSource(request.Aborted);
+        await RunChatAsync(body, async payload =>
+        {
+            if (!await sse.SendAsync(payload).ConfigureAwait(false))
+                aborted.Cancel();
+        }, aborted.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 一轮对话的全部过程，事件经 <paramref name="emit"/> 发出（delta / text_done / gloss / gloss_done / done / error，与 SSE 同形）。
+    /// 网页走 SSE，Aurora 页面走 <see cref="Echo.Board.EchoBoard"/>。
+    /// </summary>
+    internal async Task RunChatAsync(JsonObject body, Func<JsonObject, Task> emit, CancellationToken token)
+    {
         var messages = Turns(body["messages"]);
         var level = body["level"]?.GetValue<string>();
         var length = Int(body, "length", 0);
         long? conversationId = body["conversation_id"] is JsonValue v && v.TryGetValue<long>(out var id) ? id : null;
         var plan = body["practice"] is JsonObject p && Practice.WordsOf(p).Count > 0 ? p : null;
         var prompt = messages.Count > 0 ? messages : plan is not null ? [new ChatTurn("user", Practice.Opening)] : [];
-        var sse = new SseWriter(request.Response);
         var generation = Guid.NewGuid().ToString("N");
-        using var aborted = CancellationTokenSource.CreateLinkedTokenSource(request.Aborted);
-        var token = aborted.Token;
 
-        async Task Send(JsonObject payload)
+        Task Send(JsonObject payload)
         {
             payload["generation"] = generation;
-            if (!await sse.SendAsync(payload).ConfigureAwait(false))
-                aborted.Cancel();
+            return emit(payload);
         }
 
         using (await Gate.UseAsync(token).ConfigureAwait(false))

@@ -6,7 +6,7 @@
 
 1. 读取根目录 `project.manifest.json`，确认项目身份、状态、活动目录和可用命令。
 2. 读取根目录 `README.md` 和 `b-Office/现行约定.md`（本仓唯一的长期文档）。
-3. 本项目是 HistoryVulcan 宿主模块（域 echo，界面是自己的本机网页、不进 Aurora）；改代码先 vulcan.dev.start 开工作区，推理只调 Ratio 指令，不直连推理服务。
+3. 本项目是 HistoryVulcan 宿主模块（域 echo，界面是 Aurora 页面，8040 网页服务仍留给扩展和旧网页）；改代码先 vulcan.dev.start 开工作区，推理只调 Ratio 指令，不直连推理服务。
 4. 只进入 manifest 声明的活动目录。发现未登记目录时，先确认其级别、所有者和用途。
 
 ## 真值与冲突处理
