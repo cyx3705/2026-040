@@ -15,7 +15,7 @@
       "appshell-module"
     ],
     "status": "developing",
-    "version": "0.1.1",
+    "version": "0.4.0",
     "branch": "main"
   },
   "paths": {
@@ -24,7 +24,6 @@
       "b-Code/Echo.Tests",
       "b-Office",
       "b-Code",
-      "b-Code-Echo",
       "b-Code-Reader",
       "b-Code-YouTube"
     ],
@@ -32,7 +31,6 @@
       "b-Code/Echo",
       "b-Code/Echo.Tests",
       "b-Code",
-      "b-Code-Echo",
       "b-Code-Reader",
       "b-Code-YouTube"
     ],
@@ -59,33 +57,27 @@
     "conventions": "b-Office/现行约定.md"
   },
   "commands": {
-    "setup": "uv run --project b-Code-Echo echo-setup",
-    "build": "uv run --project b-Code-Echo echo-build-input",
-    "test": "uv run --project b-Code-Echo python -m unittest discover -s b-Code-Echo/tests",
+    "setup": "HistoryVulcan.Cli.exe --runtime echo.dict.setup（或在控制台执行 echo.dict.setup）",
+    "build": "dotnet build .\\b-Code\\Echo\\Echo.csproj -c Release -p:NuGetAudit=false",
+    "test": "dotnet run --project .\\b-Code\\Echo.Tests\\Echo.Tests.csproj -c Release -p:NuGetAudit=false",
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
-    "run": "uv run --project b-Code-Echo echo-serve",
-    "runShared": "uv run --project b-Code-Echo echo-serve --share",
+    "run": "宿主在跑即在 http://127.0.0.1:8040；控制台 echo.app.open 打开页面",
     "package": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Echo\\eng\\Build-EchoPackage.ps1",
-    "testKernel": "uv run --project b-Code-Echo echo-build-input --test",
-    "testSuggestUI": "node b-Code-Echo/tests/suggest_queue.cjs",
-    "testInputUI": "node b-Code-Echo/tests/composer_input.cjs",
+    "testSuggestUI": "node b-Code/Echo.Tests/ui/suggest_queue.cjs",
+    "testInputUI": "node b-Code/Echo.Tests/ui/composer_input.cjs",
     "testReaderUI": "node b-Code-Reader/tests/reader_core.cjs",
     "testReaderBrowser": "node b-Code-Reader/tests/reader_browser.cjs",
     "testReaderLive": "node b-Code-Reader/tests/reader_browser.cjs --live",
     "testConnectionBrowser": "node b-Code-Reader/tests/connection_browser.cjs",
-    "testNetwork": "uv run --project b-Code-Echo python -m unittest discover -s b-Code-Echo/tests -p test_web_access.py",
     "testYouTubeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs",
     "testYouTubeNavigationBrowser": "node b-Code-YouTube/tests/navigation_browser.cjs",
-    "testReaderPerformanceLive": "uv run --project b-Code-Echo python b-Code-Echo/tests/reader_performance.py --live",
     "testYouTubeUI": "node b-Code-YouTube/tests/timeline_core.cjs",
     "testYouTubeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live",
     "reportBuild": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Office\\technical-report\\build.ps1",
     "testRecoveryBrowser": "node b-Code-Reader/tests/recovery_browser.cjs",
     "testYouTubeUpgradeBrowser": "node b-Code-YouTube/tests/youtube_browser.cjs --upgrade",
     "testYouTubeUpgradeLive": "node b-Code-YouTube/tests/youtube_browser.cjs --live --upgrade",
-    "testExternalLive": "uv run --project b-Code-Echo python b-Code-Echo/tests/external_service_acceptance.py --live",
-    "testSharedKVLive": "uv run --project b-Code-Echo python b-Code-Echo/tests/external_service_acceptance.py --live --require-shared-kv",
-    "testModelUI": "node b-Code-Echo/tests/model_switch_browser.cjs"
+    "testModelUI": "node b-Code/Echo.Tests/ui/model_switch_browser.cjs"
   },
   "components": [
     {
@@ -100,15 +92,10 @@
     }
   ],
   "externalDependencies": [
+    "HistoryVulcan 6.0.0 或更新的发布快照：C:\\OneHistory\\HistoryClio6-023-HistoryVulcan\\z-Publish；.NET 8 Windows Desktop Runtime",
     {
-      "name": "WSL GNU C++ / CMake（仅统一服务共享 KV 与 C++ HTTP 构建）",
-      "purpose": "ECHO-KV-001/002/004、ECHO-SVC-003：服务工作区 scripts/echo-kv/build.sh 校验固定上游源码摘要，编译 server 层与 echo-proxy C++ HTTP 入口，复用已有 libllama/ggml/CUDA 和 cpp-httplib/nlohmann 源码；高频聊天、预测、共享 KV 和 SSE 不经过 Python HTTP 代理。模型切换/磁盘快照仍用既有管理脚本。Echo 应用本身无需 Linux 编译器、不加载模型，也不执行服务构建。",
-      "source": "https://github.com/ggml-org/llama.cpp/tree/9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e"
-    },
-    {
-      "name": "外部推理服务（OpenAI Chat Completions + llama-server 概率扩展）",
-      "purpose": "EXT-001～004：仅消费外部 HTTP，不在 Echo 管理推理进程或加载权重；models、流式/非流式 chat/completions、JSON Schema；输入预测另需 /completion 的 n_predict/n_probs/top_logprobs。默认模型 qwen3.5:35b-a3b-q4_K_M。ECHO-SVC-001/002/003：C++ HTTP 入口、只读实际能力、上游取消；逐请求磁盘匹配和旧 Python 代理统计已停用，模型提示缓存/后台快照保留。ECHO-KV-001：可选 /v1/kv/op 在同一模型进程/上下文提供 A/B 分叉、混合循环检查点与有界前缀重放、单 token 标签选义和释放；统一服务为单模型有界两槽，ECHO-KV-004 能力启用时 A 用一条 SSE 在服务内持续生成并优先入队，旧服务单步兼容；B 完成或取消即释放，全部公共槽及 A/B 忙时推迟快照；未支持时使用原结构化 HTTP 路径。ECHO-MODEL-001：可选 /v1/echo/models 与 /v1/echo/model 由统一服务负责全局模型切换、进度、缓存保存/恢复和失败回退。",
-      "endpoint": "http://127.0.0.1:11435/v1"
+      "name": "Ratio 模块（2026-030，本机推理服务 provider=local）",
+      "purpose": "Echo 不直连任何推理服务：概率续写 ratio.local.probs、共享 KV ratio.seq.*、流式 ratio.chat.stream/ratio.stream.*、结构化 ratio.chat.send schema=、换模 ratio.local.use、状态 ratio.local.status，全部经宿主总线安静调用"
     },
     {
       "name": "pdfLaTeX / TeX Live（仅报告构建）",
@@ -122,7 +109,7 @@
     },
     {
       "name": "Visual Studio C++ Build Tools + Windows SDK",
-      "purpose": "构建 Echo 自有 Windows User32/IMM/GDI 中文输入桥；编译产物在数据目录 native/，不安装或加载推理模型。既有原生内核源码仅保留作历史研究。",
+      "purpose": "编译 Echo 自有 Windows User32/IMM/GDI 中文输入桥（源码随模块 DLL 嵌入，echo.input.build 或首次使用时编译到数据目录 native/）；不加载推理模型",
       "source": "https://visualstudio.microsoft.com/visual-cpp-build-tools/"
     },
     {

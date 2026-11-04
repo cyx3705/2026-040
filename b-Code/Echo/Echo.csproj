@@ -30,5 +30,8 @@
 
   <ItemGroup>
     <None Update="module.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 页面与输入桥源码随 DLL 嵌入：宿主从 nupkg 字节装载，包里只有清单列出的文件。 -->
+    <EmbeddedResource Include="static\*" LogicalName="static/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="kernel\*" LogicalName="kernel/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
