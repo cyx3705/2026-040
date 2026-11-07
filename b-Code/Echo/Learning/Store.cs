@@ -28,9 +28,9 @@ internal sealed record ChatTurn(string Role, string Content, JsonArray? Glosses 
 /// <summary>用户数据里的对话历史、导入的单词表与设置（和学会的词同在 user.db）。</summary>
 internal sealed class Store
 {
-    private readonly SqliteConnection _con;
+    private readonly IUserDb _con;
 
-    public Store(SqliteConnection connection)
+    public Store(IUserDb connection)
     {
         _con = connection;
         lock (_con.Gate)
@@ -74,46 +74,39 @@ internal sealed class Store
     }
 
     /// <summary>整段替换一段对话的消息；id 为空就新建。新建时给了 title 就用它、不再自动命名（练词对话）。</summary>
+    /// <remarks>0.6.0：整段写入是一个批量事务（<see cref="IUserDb.Batch"/>），新建会话的行号用 <see cref="RowRef"/> 传给后面的消息。</remarks>
     public long Save(long? id, IReadOnlyList<ChatTurn> messages, string level, JsonObject? practice = null, string? title = null)
     {
         var now = Now();
         lock (_con.Gate)
         {
-            _con.Script("BEGIN;");
-            try
+            var steps = new List<DbStep>();
+            object convId;
+            if (id is null || _con.QueryOne("SELECT 1 FROM conversations WHERE id = ?", id.Value) is null)
             {
-                long convId;
-                if (id is null || _con.QueryOne("SELECT 1 FROM conversations WHERE id = ?", id.Value) is null)
-                {
-                    var first = messages.FirstOrDefault(m => m.Role == "user")?.Content ?? "";
-                    var name = title ?? Clip(first, 40);
-                    _con.Execute("INSERT INTO conversations (title, titled, level, created, updated, practice) VALUES (?, ?, ?, ?, ?, ?)",
-                        string.IsNullOrEmpty(name) ? "新对话" : name, title is not null ? 1 : 0, level, now, now,
-                        practice is null ? "" : practice.ToJsonString(Json.Options));
-                    convId = _con.LastInsertRowId;
-                }
-                else
-                {
-                    convId = id.Value;
-                    _con.Execute("UPDATE conversations SET level = ?, updated = ? WHERE id = ?", level, now, convId);
-                }
-
-                _con.Execute("DELETE FROM messages WHERE conv_id = ?", convId);
-                for (var i = 0; i < messages.Count; i++)
-                {
-                    var m = messages[i];
-                    _con.Execute("INSERT INTO messages (conv_id, seq, role, content, glosses) VALUES (?, ?, ?, ?, ?)",
-                        convId, i, m.Role, m.Content, m.Glosses?.ToJsonString(Json.Options));
-                }
-
-                _con.Script("COMMIT;");
-                return convId;
+                var first = messages.FirstOrDefault(m => m.Role == "user")?.Content ?? "";
+                var name = title ?? Clip(first, 40);
+                steps.Add(new DbStep("INSERT INTO conversations (title, titled, level, created, updated, practice) VALUES (?, ?, ?, ?, ?, ?)",
+                    string.IsNullOrEmpty(name) ? "新对话" : name, title is not null ? 1 : 0, level, now, now,
+                    practice is null ? "" : practice.ToJsonString(Json.Options)));
+                convId = new RowRef(0);
             }
-            catch
+            else
             {
-                _con.Script("ROLLBACK;");
-                throw;
+                convId = id.Value;
+                steps.Add(new DbStep("UPDATE conversations SET level = ?, updated = ? WHERE id = ?", level, now, id.Value));
             }
+
+            steps.Add(new DbStep("DELETE FROM messages WHERE conv_id = ?", convId));
+            for (var i = 0; i < messages.Count; i++)
+            {
+                var m = messages[i];
+                steps.Add(new DbStep("INSERT INTO messages (conv_id, seq, role, content, glosses) VALUES (?, ?, ?, ?, ?)",
+                    convId, i, m.Role, m.Content, m.Glosses?.ToJsonString(Json.Options)));
+            }
+
+            var rowIds = _con.Batch(steps);
+            return convId is long existing ? existing : rowIds[0];
         }
     }
 
@@ -224,22 +217,11 @@ internal sealed class Store
     {
         lock (_con.Gate)
         {
-            _con.Script("BEGIN;");
-            try
-            {
-                _con.Execute("INSERT INTO wordlists (name, created) VALUES (?, ?)", name, Now());
-                var id = _con.LastInsertRowId;
-                for (var i = 0; i < items.Count; i++)
-                    _con.Execute("INSERT INTO wordlist_words (list_id, seq, word, meaning, grp) VALUES (?, ?, ?, ?, ?)",
-                        id, i, items[i].Word, items[i].Meaning, items[i].Group);
-                _con.Script("COMMIT;");
-                return id;
-            }
-            catch
-            {
-                _con.Script("ROLLBACK;");
-                throw;
-            }
+            var steps = new List<DbStep> { new("INSERT INTO wordlists (name, created) VALUES (?, ?)", name, Now()) };
+            for (var i = 0; i < items.Count; i++)
+                steps.Add(new DbStep("INSERT INTO wordlist_words (list_id, seq, word, meaning, grp) VALUES (?, ?, ?, ?, ?)",
+                    new RowRef(0), i, items[i].Word, items[i].Meaning, items[i].Group));
+            return _con.Batch(steps)[0];
         }
     }
 

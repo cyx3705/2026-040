@@ -48,12 +48,8 @@ internal sealed class EchoService : IDisposable
         {
             if (_app is not null)
                 return _app;
-            string? library = null;
-            var info = await _bus.InvokeAsync("vulcan.host.info", "", cancellation).ConfigureAwait(false);
-            if (info.Success && RatioInference.DataOf(info) is JsonObject data)
-                library = data["libraryRoot"]?.GetValue<string>();
-            Paths = EchoPaths.Resolve(library);
-            _app = new EchoApp(Paths, new RatioInference(_bus), _log);
+            Paths = EchoPaths.Resolve();
+            _app = new EchoApp(Paths, new RatioInference(_bus), _log, _bus);
             return _app;
         }
         finally

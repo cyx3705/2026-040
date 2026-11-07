@@ -26,6 +26,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("sense candidates and short gloss", Sync(TestSenses)),
     ("english choices", Sync(TestEnglishChoices)),
     ("store roundtrip", Sync(TestStore)),
+    ("store through diana z", Sync(TestStoreThroughDiana)),
     ("levels prompt", Sync(TestLevels)),
     ("practice used words", Sync(TestPractice)),
     ("word list docx", Sync(TestWordLists)),
@@ -256,6 +257,28 @@ static void TestStore()
     Equal("m", app.Store.Setting("model", "x"));
     app.Store.Delete(id);
     True(app.Store.Get(id) is null, "删对话");
+}
+
+// 0.6.0：user.db 是 z 资产，缺省是 z 地址，Echo 只发 SQL 给 Diana，自己不打开库；读写结果与本地库一致。
+static void TestStoreThroughDiana()
+{
+    using var ws = new Workspace();
+    Equal("2026-040/z-学习数据/user.db", EchoPaths.DefaultUserDatabase);
+    using var diana = new FakeDiana(EchoPaths.DefaultUserDatabase, Path.Combine(ws.Root, "z", "user.db"));
+    var paths = ws.Paths with { UserDatabase = EchoPaths.DefaultUserDatabase };
+    Throws<InvalidOperationException>(() => new EchoApp(paths, new FakeInference(), _ => { }).Dispose());
+    using var app = new EchoApp(paths, new FakeInference(), _ => { }, diana);
+    var id = app.Store.Save(null, [new ChatTurn("user", "I like apples"), new ChatTurn("assistant", "Hi!")], "cefr:A2");
+    var conv = app.Store.Get(id)!;
+    Equal(2, conv["messages"]!.AsArray().Count);
+    True(conv["updated"]!.GetValue<double>() > 0, "REAL 列经 JSON 往返仍能当小数读");
+    Equal(id, app.Store.Save(id, [new ChatTurn("user", "again")], "cefr:B1"));
+    Equal(1, app.Store.Get(id)!["messages"]!.AsArray().Count);
+    var list = app.Store.AddWordList("U1", [new WordItem("go", "去", "L1"), new WordItem("bank", "", "L1")]);
+    Equal(2, app.Store.WordList(list)!["words"]!.AsArray().Count);
+    app.Dictionary.SetLearned("go", true);
+    True(app.Dictionary.LearnedLemmas().Contains("go"), "学会的词经 Diana 写入");
+    True(diana.Calls.All(name => name is "diana.z.query" or "diana.z.exec"), string.Join(",", diana.Calls));
 }
 
 static void TestLevels()

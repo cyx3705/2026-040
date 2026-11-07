@@ -18,18 +18,24 @@ internal sealed partial class EchoApp : IDisposable
 {
     internal const string DefaultModel = "qwen3.5:35b-a3b-q4_K_M";
 
-    private readonly SqliteConnection _userDb;
+    private readonly IUserDb _userDb;
     private readonly Dictionary<string, string> _families = new(StringComparer.Ordinal);
     private readonly object _familyGate = new();
     private readonly Action<string> _log;
 
-    public EchoApp(EchoPaths paths, IInference inference, Action<string> log)
+    /// <param name="paths">数据位置。</param>
+    /// <param name="inference">推理入口。</param>
+    /// <param name="log">日志。</param>
+    /// <param name="bus">经 Diana 访问 z 里的 user.db 时要用；user.db 写成本机绝对路径（测试）时可省。</param>
+    public EchoApp(EchoPaths paths, IInference inference, Action<string> log, HistoryVulcan.Core.Commands.ICommandBus? bus = null)
     {
         Paths = paths;
         Inference = inference;
         _log = log;
-        Directory.CreateDirectory(Path.GetDirectoryName(paths.UserDatabase)!);
-        _userDb = new SqliteConnection(paths.UserDatabase);
+        // 0.6.0：user.db 是 z 资产，生产经 diana.z.* 由源码区的 Diana 持连接；Echo 自己不打开它。
+        _userDb = Path.IsPathFullyQualified(paths.UserDatabase)
+            ? new LocalUserDb(paths.UserDatabase)
+            : new ZUserDb(bus ?? throw new InvalidOperationException("user.db 在 z 里，要经 diana.z 访问，但没有命令总线"), paths.UserDatabase);
         Dictionary = new Learning.Dictionary(paths.DictionaryDatabase, _userDb);
         Store = new Store(_userDb);
         Input = new InputBridge(paths.NativeDirectory);

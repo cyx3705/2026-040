@@ -20,11 +20,11 @@ internal sealed partial class Dictionary : IDisposable
     private static readonly string[] Noun = ["n."];
 
     private readonly string _path;
-    private readonly SqliteConnection _user;
+    private readonly IUserDb _user;
     private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _choices = new(StringComparer.Ordinal);
     private SqliteConnection? _dict;
 
-    public Dictionary(string dictionaryPath, SqliteConnection user)
+    public Dictionary(string dictionaryPath, IUserDb user)
     {
         _path = dictionaryPath;
         _user = user;
