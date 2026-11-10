@@ -549,12 +549,11 @@ static async Task TestReaderRunningDocumentAsync()
     Equal(1, Count("open"));
     Equal(1, Count("batch"));
     Equal(1, fake.OpenSequences);
-    True(fake.Prefixes[0].Contains("The river bank.\n\nSenses:\n", StringComparison.Ordinal), $"文档是当前段加它的义项表：{fake.Prefixes[0]}");
-    True(fake.Prefixes[0].Contains("\nbank = ", StringComparison.Ordinal) && fake.Prefixes[0].EndsWith("\n\n", StringComparison.Ordinal),
-        $"义项表一词一行：{fake.Prefixes[0]}");
+    True(fake.Prefixes[0].EndsWith("The river bank.\n\n", StringComparison.Ordinal), $"文档以当前段结尾，里面没有义项：{fake.Prefixes[0]}");
     var job = fake.Batches[0].Single(job => job.Suffix.Contains("[bank]", StringComparison.Ordinal));
-    True(job.Suffix.StartsWith("Task: The river [bank].<|im_end|>", StringComparison.Ordinal) && job.Suffix.EndsWith("Label:", StringComparison.Ordinal),
-        $"分叉只有一行任务，义项不在分叉里：{job.Suffix}");
+    True(job.Suffix.StartsWith("Task: The river [bank].\n", StringComparison.Ordinal) && job.Suffix.Contains(" A ", StringComparison.Ordinal)
+        && job.Suffix.EndsWith("<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nLabel:", StringComparison.Ordinal)
+        && !job.Suffix.Contains("\"choices\"", StringComparison.Ordinal), $"分叉是任务行加紧凑义项，不是 JSON：{job.Suffix}");
     Equal("0", job.Labels[0]);
     True(job.Labels.Count >= 3 && job.Labels[1] == " A", "标签是这个词自己的义项数");
 
@@ -563,8 +562,7 @@ static async Task TestReaderRunningDocumentAsync()
     Equal("append", done["timing"]!["prefix"]!.GetValue<string>());
     Equal(1, Count("open"));
     Equal(1, Count("append"));
-    True(fake.Prefixes[1].StartsWith("A bank loan.\n\n", StringComparison.Ordinal), "续接的是新段落");
-    True(!fake.Prefixes[1].Contains("bank =", StringComparison.Ordinal), $"bank 的义项表已在前缀里，不再续接一遍：{fake.Prefixes[1]}");
+    Equal("A bank loan.\n\n", fake.Prefixes[1]);
     Equal(2, Count("batch"));
 
     // 同一段再来一次：结果记着，不推理、不续接。
@@ -585,8 +583,7 @@ static async Task TestReaderRunningDocumentAsync()
     (items, done) = await Gloss("One bank more.", "web:b");
     Equal("create", done["timing"]!["prefix"]!.GetValue<string>());
     Equal(3, Count("open"));
-    True(fake.Prefixes[^1].Contains("My bank.\n\nOne bank more.\n\nSenses:\n", StringComparison.Ordinal)
-        && fake.Prefixes[^1].Contains("\nbank = ", StringComparison.Ordinal), "重开时文档含此前的段落，义项表重新带上");
+    True(fake.Prefixes[^1].EndsWith("My bank.\n\nOne bank more.\n\n", StringComparison.Ordinal), "重开时文档含此前的段落");
     Equal("normal", items.Single(i => i["word"]!.GetValue<string>() == "bank")["state"]!.GetValue<string>());
     Equal(1, fake.OpenSequences);
 
@@ -606,8 +603,8 @@ static async Task TestReaderRunningDocumentAsync()
     var at = longText.IndexOf("w20", StringComparison.Ordinal);
     var snippet = EchoApp.ReaderSnippet(longText, at, at + 3);
     True(snippet.StartsWith('…') && snippet.EndsWith('…') && snippet.Contains(" [w20] ") && snippet.Length < 90, $"片段两头截断在词边界：{snippet}");
-    Equal("set = n. A 一套 B 布景 / v. C 放 / D 固定的",
-        EchoApp.ReaderSenseLine("set", [new Sense("n", "一套"), new Sense("n.", "布景"), new Sense("v", "放"), new Sense("", "固定的")]));
+    Equal("n. A 一套 B 布景 / v. C 放 / D 固定的",
+        EchoApp.ReaderSenseLine([new Sense("n", "一套"), new Sense("n.", "布景"), new Sense("v", "放"), new Sense("", "固定的")]));
 }
 
 static async Task TestReaderQueueAsync()
