@@ -25,9 +25,23 @@ internal sealed partial class EchoApp
             foreach (var task in tasks.Skip(offset).Take(12))
             {
                 if (KnownNow(task.Item))
+                {
                     await send(Items(task.Item)).ConfigureAwait(false);
+                }
+                else if (_readerMemo.TryGetGloss(model, text, task.Start) is { } remembered)
+                {
+                    // 同一段再来：上次补译出的释义直接用。
+                    task.Item["gloss"] = remembered;
+                    task.Item["state"] = "normal";
+                    task.Item["source"] = "model";
+                    task.Item["fallback_reason"] = null;
+                    task.Item["cached"] = true;
+                    await send(Items(task.Item)).ConfigureAwait(false);
+                }
                 else
+                {
                     batch.Add(task);
+                }
             }
 
             if (batch.Count == 0)
@@ -77,6 +91,7 @@ internal sealed partial class EchoApp
                         item["state"] = "normal";
                         item["source"] = "model";
                         item["fallback_reason"] = null;
+                        _readerMemo.SetGloss(model, text, batch[i].Start, gloss);
                     }
                     else
                     {
