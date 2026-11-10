@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "type": "HistoryVulcan.Module",
   "name": "Echo",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Echo 逐词辅助的英语 AI 对话：Aurora 页面与伴读扩展的后端，推理经 Ratio",
   "artifact": "Echo.dll",
   "docs": "Echo.xml",

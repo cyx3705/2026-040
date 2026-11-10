@@ -64,6 +64,15 @@ internal sealed partial class EchoApp : IDisposable
 
     public void Dispose()
     {
+        try
+        {
+            // 模块卸载：把伴读常驻的序列还给服务（Ratio 卸载时也会兜底释放）。
+            DropReaderKvAsync().Wait(TimeSpan.FromSeconds(3));
+        }
+        catch (Exception)
+        {
+        }
+
         Input.Dispose();
         Dictionary.Dispose();
         _userDb.Dispose();

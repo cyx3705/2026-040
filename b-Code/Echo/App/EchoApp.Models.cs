@@ -154,6 +154,9 @@ internal sealed partial class EchoApp
                 .FirstOrDefault(m => m["name"]?.GetValue<string>() == name) ?? throw new HttpError(404, "外部服务未提供此模型");
             if (target["supported"]?.GetValueKind() != JsonValueKind.True)
                 throw new HttpError(422, target["reason"]?.GetValue<string>() is { Length: > 0 } reason ? reason : "此模型当前不可用");
+            // 独占期间没有别的推理在跑：伴读常驻的序列与能力缓存都跟着旧模型作废。
+            await DropReaderKvAsync().ConfigureAwait(false);
+            _readerCaps = null;
             if (catalog["current"]?.GetValue<string>() != name)
             {
                 try

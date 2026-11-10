@@ -80,12 +80,56 @@ internal sealed class FakeInference : IInference
     public Task<KvCapabilities> CapabilitiesAsync(string model, CancellationToken cancellation)
     {
         Call("caps");
-        return Task.FromResult(new KvCapabilities(Shared, "fake", Shared ? null : "fake_unsupported", new JsonObject { ["supported"] = Shared }));
+        return Task.FromResult(new KvCapabilities(Shared, "fake", Shared ? null : "fake_unsupported",
+            new JsonObject { ["supported"] = Shared, ["append"] = Appendable, ["select_batch"] = Appendable }));
+    }
+
+    /// <summary>服务支持续接与整批分叉（新服务）。</summary>
+    public bool Appendable { get; set; }
+
+    /// <summary>每次开序列/续接送进去的文本，按顺序。</summary>
+    public List<string> Prefixes { get; } = [];
+
+    /// <summary>每批分叉的任务后缀。</summary>
+    public List<IReadOnlyList<ChooseJob>> Batches { get; } = [];
+
+    /// <summary>下一次续接抛这个异常（一次性）。</summary>
+    public InferenceException? AppendFailure { get; set; }
+
+    public Task<SequenceHandle> AppendSequenceAsync(SequenceHandle sequence, string text, CancellationToken cancellation)
+    {
+        Call("append");
+        if (AppendFailure is { } failure)
+        {
+            AppendFailure = null;
+            throw failure;
+        }
+
+        lock (Calls)
+            Prefixes.Add(text);
+        return Task.FromResult(sequence with { PrefixTokens = sequence.PrefixTokens + text.Length });
+    }
+
+    public Task<ChooseBatch> ChooseBatchAsync(SequenceHandle sequence, string? prefixText, IReadOnlyList<ChooseJob> jobs, CancellationToken cancellation)
+    {
+        Call("batch");
+        lock (Calls)
+            Batches.Add(jobs);
+        var rows = new List<ChooseResult>();
+        foreach (var job in jobs)
+        {
+            Call("choose");
+            rows.Add(new ChooseResult(Label(job.Labels), 10, 0));
+        }
+
+        return Task.FromResult(new ChooseBatch(rows, 1.5));
     }
 
     public Task<SequenceHandle> OpenSequenceAsync(string model, string text, CancellationToken cancellation)
     {
         Call("open");
+        lock (Calls)
+            Prefixes.Add(text);
         OpenSequences++;
         return Task.FromResult(new SequenceHandle("1", "e", text.Length));
     }

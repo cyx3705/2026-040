@@ -2,7 +2,7 @@
   <PropertyGroup>
     <!-- 版本的唯一真源。module.manifest.json 与根 project.manifest.json 必须同值，
          打包脚本与合同检查会逐一比对——宿主对版本不一致的处理是静默跳过整个模块。 -->
-    <EchoVersion>0.6.0</EchoVersion>
+    <EchoVersion>0.7.0</EchoVersion>
     <!-- 只用注册器 + 命令总线 + CommandContext.Progress 时是 5.1.2（冻结接入面）；
          用到 IModuleContext.Log 改 5.5.0，用到 RegisterFrontend 改 5.4.0。 -->
     <MinimumHistoryVulcanVersion>6.0.0</MinimumHistoryVulcanVersion>

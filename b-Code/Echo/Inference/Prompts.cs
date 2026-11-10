@@ -135,6 +135,16 @@ internal static partial class Prompts
         return $"{remainder}<end_of_turn>\n<start_of_turn>user\n{instruction}<end_of_turn>\n<start_of_turn>model\nLabel:";
     }
 
+    /// <summary>收住还开着的 user 回合、开 assistant 回合停在「Label:」——任务写在 user 回合末尾时的分叉尾巴。</summary>
+    public static string LabelTail(string template)
+    {
+        if (template == "chatml")
+            return "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nLabel:";
+        if (template == "gemma4")
+            return "<turn|>\n<|turn>model\n<|channel>thought\n<channel|>Label:";
+        return "<end_of_turn>\n<start_of_turn>model\nLabel:";
+    }
+
     /// <summary>
     /// text 以空格结尾（或为空）时预测下一个词；以字母结尾时补全正在打的词。补全时退回到这个词开头前做前向，
     /// 只留以已打字母开头的候选；凑不满再按词频从词典补。

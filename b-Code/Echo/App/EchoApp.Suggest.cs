@@ -164,6 +164,7 @@ internal sealed partial class EchoApp
     {
         using (await Gate.RequestAsync(cancellation).ConfigureAwait(false))
         {
+            await DropReaderKvAsync().ConfigureAwait(false);
             var sequence = await Inference.OpenSequenceAsync(model, prompt, cancellation).ConfigureAwait(false);
             try
             {

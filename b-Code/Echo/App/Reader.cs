@@ -115,7 +115,7 @@ internal sealed partial class EchoApp
 
     private bool KnownNow(JsonObject item)
     {
-        if (!Dictionary.LearnedLemmas().Contains(item["lemma"]!.GetValue<string>()))
+        if (!Dictionary.IsLearned(item["lemma"]!.GetValue<string>()))
             return false;
         item["state"] = "skipped_learned";
         item["gloss"] = "";
@@ -149,12 +149,21 @@ internal sealed partial class EchoApp
 
         try
         {
+            // 词典不占模型序列槽：即使其他对话/段落还在推理，也先显示可用释义。
+            var (items, tasks) = PrepareReader(text);
+            await Send(new JsonObject { ["items"] = new JsonArray(items.Select(i => (JsonNode)i.DeepClone()).ToArray()), ["phase"] = "dictionary" })
+                .ConfigureAwait(false);
+            if (tasks.Count == 0)
+            {
+                await Send(new JsonObject { ["done"] = true, ["input_tokens"] = 0, ["decisions"] = 0 }).ConfigureAwait(false);
+                return;
+            }
             using (await Gate.UseAsync(token).ConfigureAwait(false))
             {
                 await Gate.Slot.WaitAsync(token).ConfigureAwait(false);
                 try
                 {
-                    await ReaderEventsAsync(text, session, Send, token).ConfigureAwait(false);
+                    await ReaderEventsAsync(text, session, tasks, Send, token).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -167,34 +176,39 @@ internal sealed partial class EchoApp
         }
     }
 
-    private async Task ReaderEventsAsync(string text, string? session, Func<JsonObject, Task> send, CancellationToken token)
+    private async Task ReaderEventsAsync(string text, string? session, List<ReaderTask> all, Func<JsonObject, Task> send, CancellationToken token)
     {
         var model = CurrentModel;
-        var template = await TemplateAsync(model, token).ConfigureAwait(false) ?? "chatml";
-        var (items, all) = PrepareReader(text);
-        await send(new JsonObject { ["items"] = new JsonArray(items.Select(i => (JsonNode)i.DeepClone()).ToArray()), ["phase"] = "dictionary" })
-            .ConfigureAwait(false);
         var unknown = all.Where(t => t.Senses.Count == 0).ToList();
         var tasks = all.Where(t => t.Senses.Count > 0).ToList();
         var passages = new List<string>();
+        string? digest = null;
         if (session is not null && all.Count > 0)
         {
-            var digest = ReaderContexts.Digest(model, session);
+            digest = ReaderContexts.Digest(model, session);
             passages = Contexts.Load(digest);
             if (!passages.Contains(text))
+            {
+                // 只在加了新段落时落盘；段落表只增（超预算才从头丢一半），常驻前缀才能一直续接。
                 passages.Add(text);
-            passages = passages.TakeLast(64).ToList();
-            while (passages.Count > 1 && passages.Sum(p => p.Length) > 8000)
-                passages.RemoveAt(0);
-            Contexts.Save(digest, passages);
+                TrimReaderPassages(passages);
+                Contexts.Save(digest, passages);
+            }
+        }
+        else
+        {
+            passages.Add(text);
         }
 
         var earlier = new JsonArray(passages.Where(p => p != text).Select(p => (JsonNode)JsonValue.Create(p)!).ToArray());
-        var shared = tasks.Count > 0 && (await Inference.CapabilitiesAsync(model, token).ConfigureAwait(false)).Supported;
+        var caps = tasks.Count > 0 ? await ReaderCapsAsync(model, token).ConfigureAwait(false) : null;
         int decisions = 0, inputTokens = 0;
-        if (shared)
+        JsonObject? timing = null;
+        if (caps is { Supported: true })
         {
-            (decisions, inputTokens) = await ReaderSharedAsync(tasks, text, earlier, model, template, send, token).ConfigureAwait(false);
+            var template = await TemplateAsync(model, token).ConfigureAwait(false) ?? "chatml";
+            (decisions, inputTokens, timing) = await ReaderSharedAsync(tasks, text, digest, passages, model, template, caps, send, token)
+                .ConfigureAwait(false);
         }
         else
         {
@@ -290,6 +304,9 @@ internal sealed partial class EchoApp
         }
 
         await ReaderUnknownAsync(unknown, text, model, send, token).ConfigureAwait(false);
-        await send(new JsonObject { ["done"] = true, ["input_tokens"] = inputTokens, ["decisions"] = decisions }).ConfigureAwait(false);
+        var done = new JsonObject { ["done"] = true, ["input_tokens"] = inputTokens, ["decisions"] = decisions };
+        if (timing is not null)
+            done["timing"] = timing;
+        await send(done).ConfigureAwait(false);
     }
 }

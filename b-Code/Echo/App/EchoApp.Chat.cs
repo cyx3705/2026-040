@@ -130,6 +130,7 @@ internal sealed partial class EchoApp
     {
         var sourcePrompt = Prompts.AssistantPrompt(template, system, prompt);
         using var lease = await Gate.RequestAsync(token).ConfigureAwait(false);
+        await DropReaderKvAsync().ConfigureAwait(false);
         var sequence = await Inference.OpenSequenceAsync(model, sourcePrompt, token).ConfigureAwait(false);
         var context = new SharedContext(sequence, sourcePrompt, template);
         var processed = new HashSet<int>();

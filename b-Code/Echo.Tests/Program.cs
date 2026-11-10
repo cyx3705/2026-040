@@ -40,6 +40,10 @@ var tests = new (string Name, Func<Task> Run)[]
     ("http chat plain", () => TestHttpChatAsync(shared: false)),
     ("http chat shared kv", () => TestHttpChatAsync(shared: true)),
     ("http reader gloss", TestHttpReaderAsync),
+    ("reader diana query budget and learning", TestReaderQueryBudgetAsync),
+    ("reader dictionary bypasses model queue", TestReaderQueueAsync),
+    ("reader running document and batch", TestReaderRunningDocumentAsync),
+    ("learned cache refreshes external writes", TestLearnedRefreshAsync),
     ("http conversations and wordlists", TestHttpLibraryAsync),
     ("http model switch", TestHttpModelSwitchAsync),
     ("http input origin check", TestHttpInputOriginAsync),
@@ -497,6 +501,159 @@ static async Task TestHttpReaderAsync()
     True(Directory.GetFiles(server.Workspace.Paths.ReaderContextDirectory).Length == 1, "存了伴读上下文");
 }
 
+static async Task TestReaderQueryBudgetAsync()
+{
+    var fake = new FakeInference { Shared = true };
+    await using var server = await TestServer.StartAsync(fake, throughDiana: true);
+    var before = server.Diana!.Calls.Count(c => c == "diana.z.query");
+    var watch = Stopwatch.StartNew();
+    var (_, body) = await server.SendAsync(HttpMethod.Post, "/api/reader/gloss",
+        JsonSerializer.Serialize(new { text = string.Join(" ", Enumerable.Repeat("bank", 12)) }));
+    var queries = server.Diana.Calls.Count(c => c == "diana.z.query") - before;
+    Equal(12, fake.Calls.Count(c => c == "choose"));
+    True(queries <= 2, $"12 词不应按词跨 Diana 查询：{queries}");
+    Console.WriteLine($"  reader 12 targets: {queries} Diana queries, {watch.ElapsedMilliseconds}ms (fake inference)");
+    True(body.Contains("\"done\":true"), "完整返回");
+
+    fake.Label = labels => { server.App.Dictionary.SetLearned("bank", true); return labels[^1]; };
+    var (_, learned) = await server.SendAsync(HttpMethod.Post, "/api/reader/gloss", """{"text":"bank bank"}""");
+    True(learned.Contains("\"state\":\"skipped_learned\""), "推理中标熟立即抑制结果");
+    True(!learned.Contains("\"source\":\"model\""), "整批里标熟的词不回填模型释义");
+    // 两个词在同一批里一起算（WEB-PERF-002），回填前各自再查一次标熟。
+    Equal(14, fake.Calls.Count(c => c == "choose"));
+    Equal(0, fake.OpenSequences);
+    server.App.Dictionary.SetLearned("bank", false);
+    True(!server.App.Dictionary.IsLearned("bank"), "取消标熟立即生效");
+}
+
+static async Task TestReaderRunningDocumentAsync()
+{
+    var fake = new FakeInference { Shared = true, Appendable = true, Label = labels => labels[2] };
+    await using var server = await TestServer.StartAsync(fake);
+
+    async Task<(List<JsonObject> Items, JsonObject Done)> Gloss(string text, string session)
+    {
+        var (code, body) = await server.SendAsync(HttpMethod.Post, "/api/reader/gloss", JsonSerializer.Serialize(new { text, session }));
+        Equal(200, code);
+        var events = body.Split("\n\n", StringSplitOptions.RemoveEmptyEntries).Select(e => JsonNode.Parse(e["data: ".Length..])!.AsObject()).ToList();
+        return (events.Skip(1).Where(e => e["items"] is not null).SelectMany(e => e["items"]!.AsArray()).Select(i => i!.AsObject()).ToList(),
+            events.Single(e => e["done"] is not null));
+    }
+
+    int Count(string call) => fake.Calls.Count(c => c == call);
+
+    // 第一段：开序列，文档只有这一段；整段的多义词一批算完，序列留着。
+    var (items, done) = await Gloss("The river bank.", "web:a");
+    Equal("河岸", items.Single(i => i["word"]!.GetValue<string>() == "bank")["gloss"]!.GetValue<string>());
+    Equal("create", done["timing"]!["prefix"]!.GetValue<string>());
+    Equal(1, Count("open"));
+    Equal(1, Count("batch"));
+    Equal(1, fake.OpenSequences);
+    True(fake.Prefixes[0].EndsWith("The river bank.\n\n", StringComparison.Ordinal), "文档以当前段结尾");
+    var suffix = fake.Batches[0].Single(job => job.Suffix.Contains("[bank]", StringComparison.Ordinal)).Suffix;
+    True(suffix.StartsWith("Task: The river [bank].\nA ", StringComparison.Ordinal), $"任务行带方括号标出目标词：{suffix}");
+    True(suffix.EndsWith("Label:", StringComparison.Ordinal) && !suffix.Contains("\"choices\""), "后缀是紧凑行，不是 JSON");
+    Equal("0", fake.Batches[0][0].Labels[0]);
+
+    // 同一页面的下一段：只续接新增文本，不重开。
+    (_, done) = await Gloss("A bank loan.", "web:a");
+    Equal("append", done["timing"]!["prefix"]!.GetValue<string>());
+    Equal(1, Count("open"));
+    Equal(1, Count("append"));
+    Equal("A bank loan.\n\n", fake.Prefixes[1]);
+    Equal(2, Count("batch"));
+
+    // 同一段再来一次：结果记着，不推理、不续接。
+    (items, done) = await Gloss("A bank loan.", "web:a");
+    Equal(2, Count("batch"));
+    Equal(1, Count("append"));
+    Equal(1, done["timing"]!["cached"]!.GetValue<int>());
+    Equal("河岸", items.Single(i => i["word"]!.GetValue<string>() == "bank")["gloss"]!.GetValue<string>());
+
+    // 换页面：旧序列释放，新开一条。
+    await Gloss("My bank.", "web:b");
+    Equal(2, Count("open"));
+    Equal(1, Count("close"));
+    Equal(1, fake.OpenSequences);
+
+    // 续接被服务拒绝（序列被回收）：重开，文档里新旧两段都在，结果照常。
+    fake.AppendFailure = new KvUnsupportedException("stale_sequence");
+    (items, done) = await Gloss("One bank more.", "web:b");
+    Equal("create", done["timing"]!["prefix"]!.GetValue<string>());
+    Equal(3, Count("open"));
+    True(fake.Prefixes[^1].EndsWith("My bank.\n\nOne bank more.\n\n", StringComparison.Ordinal), "重开时文档含此前的段落");
+    Equal("normal", items.Single(i => i["word"]!.GetValue<string>() == "bank")["state"]!.GetValue<string>());
+    Equal(1, fake.OpenSequences);
+
+    // 别的入口要用序列前先让伴读让位。
+    await server.App.DropReaderKvAsync();
+    Equal(0, fake.OpenSequences);
+
+    // 段落表超预算从头丢到一半；没超不动。
+    var passages = Enumerable.Range(0, 30).Select(i => new string('x', 500) + i).ToList();
+    EchoApp.TrimReaderPassages(passages);
+    True(passages.Sum(p => p.Length) <= EchoApp.ReaderDocBudget / 2 && passages[^1].EndsWith("29", StringComparison.Ordinal), "超预算丢到一半且保留最新");
+    var small = new List<string> { "a", "b" };
+    EchoApp.TrimReaderPassages(small);
+    Equal(2, small.Count);
+
+    var longText = string.Join(" ", Enumerable.Range(0, 40).Select(i => "w" + i));
+    var at = longText.IndexOf("w20", StringComparison.Ordinal);
+    var snippet = EchoApp.ReaderSnippet(longText, at, at + 3);
+    True(snippet.StartsWith('…') && snippet.EndsWith('…') && snippet.Contains(" [w20] ") && snippet.Length < 90, $"片段两头截断在词边界：{snippet}");
+}
+
+static async Task TestReaderQueueAsync()
+{
+    var fake = new FakeInference { Shared = true };
+    await using var server = await TestServer.StartAsync(fake);
+    await server.App.Gate.Slot.WaitAsync();
+    var held = true;
+    try
+    {
+        // 单义块无须等槽，也无须读取模型元数据。
+        var (_, single) = await server.SendAsync(HttpMethod.Post, "/api/reader/gloss", """{"text":"apple"}""")
+            .WaitAsync(TimeSpan.FromSeconds(3));
+        True(single.Contains("\"done\":true"), "单义块直接完成");
+        Equal(0, fake.Calls.Count);
+
+        using var message = new HttpRequestMessage(HttpMethod.Post, server.Url + "/api/reader/gloss")
+        { Content = new StringContent("""{"text":"bank"}""", Encoding.UTF8, "application/json") };
+        using var response = await server.Client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+        using var reader = new StreamReader(await response.Content.ReadAsStreamAsync());
+        var first = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        True(first?.Contains("\"phase\":\"dictionary\"") == true, "模型槽被占用时首个词典事件仍到达");
+        Equal(0, fake.Calls.Count);
+        server.App.Gate.Slot.Release();
+        held = false;
+        await reader.ReadToEndAsync().WaitAsync(TimeSpan.FromSeconds(3));
+    }
+    finally
+    {
+        if (held)
+            server.App.Gate.Slot.Release();
+    }
+}
+
+static async Task TestLearnedRefreshAsync()
+{
+    using var ws = new Workspace();
+    using var diana = new FakeDiana(EchoPaths.DefaultUserDatabase, Path.Combine(ws.Root, "z", "user.db"));
+    using var first = new EchoApp(ws.Paths with { UserDatabase = EchoPaths.DefaultUserDatabase }, new FakeInference(), _ => { }, diana);
+    using var second = new EchoApp(ws.Paths with { UserDatabase = EchoPaths.DefaultUserDatabase }, new FakeInference(), _ => { }, diana);
+    True(!first.Dictionary.IsLearned("bank"), "初始未标熟");
+    var copy = first.Dictionary.LearnedLemmas();
+    copy.Add("bank");
+    True(!first.Dictionary.IsLearned("bank"), "调用者不能修改缓存");
+    second.Dictionary.SetLearned("bank", true);
+    await Task.Delay(1100);
+    True(first.Dictionary.IsLearned("bank"), "外部标熟一秒后刷新");
+    second.Dictionary.SetLearned("bank", false);
+    await Task.Delay(1100);
+    True(!first.Dictionary.IsLearned("bank"), "外部取消一秒后刷新");
+}
+
 static async Task TestHttpLibraryAsync()
 {
     await using var server = await TestServer.StartAsync(new FakeInference { Reply = ["练习", "对话"] });
@@ -667,21 +824,25 @@ internal sealed class TestServer : IAsyncDisposable
 
     public FakeInference Fake { get; }
 
+    public FakeDiana? Diana { get; private init; }
+
     public HttpClient Client { get; } = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public string Url => _host.Url;
 
-    public static Task<TestServer> StartAsync(FakeInference fake)
+    public static Task<TestServer> StartAsync(FakeInference fake, bool throughDiana = false)
     {
         var workspace = new Workspace();
-        var app = new EchoApp(workspace.Paths, fake, _ => { });
+        var diana = throughDiana ? new FakeDiana(EchoPaths.DefaultUserDatabase, Path.Combine(workspace.Root, "z", "user.db")) : null;
+        var paths = throughDiana ? workspace.Paths with { UserDatabase = EchoPaths.DefaultUserDatabase } : workspace.Paths;
+        var app = new EchoApp(paths, fake, _ => { }, diana);
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         var host = new HttpHost(port, false, null, app.HandleAsync, _ => { });
         host.Start();
-        return Task.FromResult(new TestServer(workspace, app, host, fake));
+        return Task.FromResult(new TestServer(workspace, app, host, fake) { Diana = diana });
     }
 
     public async Task<(int Status, string Body)> SendAsync(HttpMethod method, string path, string? json = null)
@@ -708,6 +869,7 @@ internal sealed class TestServer : IAsyncDisposable
     {
         _host.Dispose();
         App.Dispose();
+        Diana?.Dispose();
         Client.Dispose();
         Workspace.Dispose();
         return ValueTask.CompletedTask;

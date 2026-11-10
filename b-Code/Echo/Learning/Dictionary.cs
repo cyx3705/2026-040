@@ -23,6 +23,8 @@ internal sealed partial class Dictionary : IDisposable
     private readonly IUserDb _user;
     private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _choices = new(StringComparer.Ordinal);
     private SqliteConnection? _dict;
+    private HashSet<string>? _learned;
+    private long _learnedAt;
 
     public Dictionary(string dictionaryPath, IUserDb user)
     {
@@ -374,7 +376,24 @@ internal sealed partial class Dictionary : IDisposable
     public HashSet<string> LearnedLemmas()
     {
         lock (_user.Gate)
-            return _user.Query("SELECT lemma FROM learned").Select(r => (string)r[0]!).ToHashSet(StringComparer.Ordinal);
+            return new HashSet<string>(LearnedSnapshot(), StringComparer.Ordinal);
+    }
+
+    // WEB-PERF-001：逐词检查不能逐次跨 Diana 读取全表。本机写立即更新，外部写最多一秒后重读。
+    private HashSet<string> LearnedSnapshot()
+    {
+        if (_learned is null || Environment.TickCount64 - _learnedAt >= 1000)
+        {
+            _learned = _user.Query("SELECT lemma FROM learned").Select(r => (string)r[0]!).ToHashSet(StringComparer.Ordinal);
+            _learnedAt = Environment.TickCount64;
+        }
+        return _learned;
+    }
+
+    public bool IsLearned(string lemma)
+    {
+        lock (_user.Gate)
+            return LearnedSnapshot().Contains(lemma);
     }
 
     public List<(string Lemma, string Gloss)> Learned()
@@ -393,6 +412,13 @@ internal sealed partial class Dictionary : IDisposable
                 _user.Execute("INSERT OR REPLACE INTO learned VALUES (?, ?)", lemma, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0);
             else
                 _user.Execute("DELETE FROM learned WHERE lemma = ?", lemma);
+            if (_learned is not null)
+            {
+                if (learned)
+                    _learned.Add(lemma);
+                else
+                    _learned.Remove(lemma);
+            }
         }
     }
 

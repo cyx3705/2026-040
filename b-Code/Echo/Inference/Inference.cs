@@ -14,7 +14,20 @@ internal class InferenceException(string message) : Exception(message);
 internal sealed class KvUnsupportedException(string message) : InferenceException(message);
 
 /// <summary>共享 KV 能力。</summary>
-internal sealed record KvCapabilities(bool Supported, string Backend, string? Reason, JsonObject Raw);
+internal sealed record KvCapabilities(bool Supported, string Backend, string? Reason, JsonObject Raw)
+{
+    /// <summary>服务能在序列末尾续接文本（前缀只增不重算）。</summary>
+    public bool Append => Supported && Raw["append"]?.GetValueKind() == JsonValueKind.True;
+
+    /// <summary>服务能把很多分叉并进同一次前向。</summary>
+    public bool Batch => Supported && Raw["select_batch"]?.GetValueKind() == JsonValueKind.True;
+}
+
+/// <summary>整批分叉里的一个任务：后缀文本与允许的标签。</summary>
+internal sealed record ChooseJob(string Suffix, IReadOnlyList<string> Labels);
+
+/// <summary>整批分叉的结果（与任务同序）与服务内耗时。</summary>
+internal sealed record ChooseBatch(IReadOnlyList<ChooseResult> Rows, double ServiceMs);
 
 /// <summary>共享 KV 序列句柄。</summary>
 internal sealed record SequenceHandle(string Id, string Epoch, int PrefixTokens);
@@ -49,6 +62,14 @@ internal interface IInference
     Task<SequenceHandle> OpenSequenceAsync(string model, string text, CancellationToken cancellation);
 
     Task<ChooseResult> ChooseAsync(SequenceHandle sequence, string prefixText, string suffixText, IReadOnlyList<string> labels, CancellationToken cancellation);
+
+    /// <summary>在序列末尾续接文本，只算新增的 token；返回续接后的句柄。</summary>
+    Task<SequenceHandle> AppendSequenceAsync(SequenceHandle sequence, string text, CancellationToken cancellation);
+
+    /// <summary>
+    /// 一次分叉很多个：所有任务并进同一次前向，各选一个标签。<paramref name="prefixText"/> 为空表示在序列末尾分叉。
+    /// </summary>
+    Task<ChooseBatch> ChooseBatchAsync(SequenceHandle sequence, string? prefixText, IReadOnlyList<ChooseJob> jobs, CancellationToken cancellation);
 
     IAsyncEnumerable<string> SequenceChatAsync(SequenceHandle sequence, int maxTokens, CancellationToken cancellation);
 
@@ -168,6 +189,32 @@ internal sealed class RatioInference(ICommandBus bus) : IInference
             + $"labels={Q(new JsonArray(labels.Select(l => (JsonNode)JsonValue.Create(l)!).ToArray()))}", cancellation).ConfigureAwait(false);
         return new ChooseResult(data["label"]?.GetValue<string>() ?? "",
             data["shared_prefix_tokens"]?.GetValue<int>() ?? 0, data["replayed_tokens"]?.GetValue<int>() ?? 0);
+    }
+
+    public async Task<SequenceHandle> AppendSequenceAsync(SequenceHandle sequence, string text, CancellationToken cancellation)
+    {
+        var data = await CallAsync($"ratio.seq.append sequence={Q(sequence.Id)} epoch={Q(sequence.Epoch)} text={Q(text)}", cancellation)
+            .ConfigureAwait(false);
+        return new SequenceHandle(data["sequence"]!.ToString(), data["epoch"]!.ToString(), data["prefixTokens"]!.GetValue<int>());
+    }
+
+    public async Task<ChooseBatch> ChooseBatchAsync(SequenceHandle sequence, string? prefixText, IReadOnlyList<ChooseJob> jobs,
+        CancellationToken cancellation)
+    {
+        var array = new JsonArray(jobs.Select(job => (JsonNode)new JsonObject
+        {
+            ["suffix"] = job.Suffix,
+            ["labels"] = new JsonArray(job.Labels.Select(l => (JsonNode)JsonValue.Create(l)!).ToArray()),
+        }).ToArray());
+        var command = $"ratio.seq.batch sequence={Q(sequence.Id)} epoch={Q(sequence.Epoch)} jobs={Q(array)}";
+        if (!string.IsNullOrEmpty(prefixText))
+            command += " prefix=" + Q(prefixText);
+        var data = await CallAsync(command, cancellation).ConfigureAwait(false);
+        if (data["results"] is not JsonArray results || results.Count != jobs.Count)
+            throw new InferenceException("ratio.seq.batch 回执的结果数与任务数不符");
+        var rows = results.Select(row => new ChooseResult(row?["label"]?.GetValue<string>() ?? "",
+            row?["shared_prefix_tokens"]?.GetValue<int>() ?? 0, row?["replayed_tokens"]?.GetValue<int>() ?? 0)).ToList();
+        return new ChooseBatch(rows, data["serviceMs"]?.GetValue<double>() ?? 0);
     }
 
     public async IAsyncEnumerable<string> SequenceChatAsync(SequenceHandle sequence, int maxTokens, [EnumeratorCancellation] CancellationToken cancellation)
