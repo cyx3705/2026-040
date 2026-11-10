@@ -160,13 +160,20 @@ internal sealed partial class EchoApp
             }
             using (await Gate.UseAsync(token).ConfigureAwait(false))
             {
-                await Gate.Slot.WaitAsync(token).ConfigureAwait(false);
+                // 序列槽等久了就留一行日志：占着它的那一段停在哪一步，卡死时不用猜。
+                while (!await Gate.Slot.WaitAsync(TimeSpan.FromSeconds(15), token).ConfigureAwait(false))
+                    Log($"伴读等序列槽已超过 15 秒，占用者停在：{_readerStage}");
+                var watch = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
+                    _readerStage = "start";
                     await ReaderEventsAsync(text, session, tasks, Send, token).ConfigureAwait(false);
                 }
                 finally
                 {
+                    if (watch.ElapsedMilliseconds > 5000)
+                        Log($"伴读一段用了 {watch.ElapsedMilliseconds} ms（{tasks.Count} 个待定词），最后停在：{_readerStage}");
+                    _readerStage = "idle";
                     Gate.Slot.Release();
                 }
             }
@@ -201,11 +208,13 @@ internal sealed partial class EchoApp
         }
 
         var earlier = new JsonArray(passages.Where(p => p != text).Select(p => (JsonNode)JsonValue.Create(p)!).ToArray());
+        _readerStage = "caps";
         var caps = tasks.Count > 0 ? await ReaderCapsAsync(model, token).ConfigureAwait(false) : null;
         int decisions = 0, inputTokens = 0;
         JsonObject? timing = null;
         if (caps is { Supported: true })
         {
+            _readerStage = "template";
             var template = await TemplateAsync(model, token).ConfigureAwait(false) ?? "chatml";
             (decisions, inputTokens, timing) = await ReaderSharedAsync(tasks, text, digest, passages, model, template, caps, send, token)
                 .ConfigureAwait(false);
@@ -303,7 +312,9 @@ internal sealed partial class EchoApp
             }
         }
 
+        _readerStage = "unknown-words";
         await ReaderUnknownAsync(unknown, text, model, send, token).ConfigureAwait(false);
+        _readerStage = "send-done";
         var done = new JsonObject { ["done"] = true, ["input_tokens"] = inputTokens, ["decisions"] = decisions };
         if (timing is not null)
             done["timing"] = timing;

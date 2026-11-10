@@ -128,6 +128,9 @@ internal sealed partial class EchoApp
     // 只在持有序列槽（Gate.Slot）或独占闸门时读写。
     private ReaderKv? _readerKv;
     private (string Model, KvCapabilities Caps, long At)? _readerCaps;
+
+    /// <summary>占着序列槽的那一段伴读走到了哪一步（只给日志看）。</summary>
+    private volatile string _readerStage = "idle";
     private readonly ReaderMemo _readerMemo = new(512);
 
     /// <summary>共享 KV 能力一分钟问一次：伴读每段都问是白白多一趟往返。问不到或不支持时不记。</summary>
@@ -295,6 +298,7 @@ internal sealed partial class EchoApp
             }
         }
 
+        _readerStage = "send-settled";
         if (settled.Count > 0)
             await send(Items([.. settled])).ConfigureAwait(false);
 
@@ -343,8 +347,10 @@ internal sealed partial class EchoApp
 
         try
         {
+            _readerStage = "request-gate";
             using (await Gate.RequestAsync(token).ConfigureAwait(false))
             {
+                _readerStage = "prefix";
                 var watch = Stopwatch.StartNew();
                 var reused = _readerKv is not null;
                 ReaderKv kv;
@@ -379,6 +385,7 @@ internal sealed partial class EchoApp
                         continue;
 
                     var jobs = active.Select(task => ReaderJob(template, text, task)).ToList();
+                    _readerStage = $"select {offset}/{pending.Count}";
                     watch.Restart();
                     ChooseBatch result;
                     try
@@ -412,6 +419,7 @@ internal sealed partial class EchoApp
                         task.Item["replayed_tokens"] = row.ReplayedTokens;
                     }
 
+                    _readerStage = $"send {offset}/{pending.Count}";
                     await send(Items([.. active.Select(t => t.Item)])).ConfigureAwait(false);
                 }
             }

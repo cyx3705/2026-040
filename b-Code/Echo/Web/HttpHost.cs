@@ -75,6 +75,15 @@ internal sealed class SseWriter(HttpListenerResponse response)
 
     public bool Broken => _broken;
 
+    /// <summary>一个事件最多写多久；超过就判定对端不再读。</summary>
+    internal static TimeSpan WriteTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    private async Task WriteAsync(byte[] bytes)
+    {
+        await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+        await response.OutputStream.FlushAsync().ConfigureAwait(false);
+    }
+
     public async Task<bool> SendAsync(JsonNode payload)
     {
         if (_broken)
@@ -93,8 +102,18 @@ internal sealed class SseWriter(HttpListenerResponse response)
             }
 
             var bytes = Encoding.UTF8.GetBytes("data: " + Json.Serialize(payload) + "\n\n");
-            await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
-            await response.OutputStream.FlushAsync().ConfigureAwait(false);
+            // 对端连着却不读（标签页被冻结、扩展丢了读取器）时写会一直挂着，而调用方往往还占着模型的序列槽：
+            // 限时写不出去就当连接断了，掐掉它。HttpListener 的写不认取消令牌，只能靠 Abort 让挂起的写失败。
+            var write = WriteAsync(bytes);
+            if (await Task.WhenAny(write, Task.Delay(WriteTimeout)).ConfigureAwait(false) != write)
+            {
+                _broken = true;
+                _ = write.ContinueWith(static t => _ = t.Exception, TaskScheduler.Default);
+                response.Abort();
+                return false;
+            }
+
+            await write.ConfigureAwait(false);
             return true;
         }
         catch (Exception ex) when (ex is HttpListenerException or IOException or ObjectDisposedException or InvalidOperationException)
