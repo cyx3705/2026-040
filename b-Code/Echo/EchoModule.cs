@@ -85,7 +85,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".app.status",
             Domain = domain,
             CommandClass = "app",
-            Summary = "查看 Echo：网页服务地址与是否在跑、数据位置、词典是否装好、当前模型与本机推理服务状态。",
+            Summary = "查看网页服务、词典和模型状态",
             Example = domain + ".app.status",
             Readonly = true,
             Handler = async context =>
@@ -111,7 +111,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".app.start",
             Domain = domain,
             CommandClass = "app",
-            Summary = "启动 Echo 网页服务（宿主启动时已自动启动）；share=true 时向局域网共享扩展接口，远端要带共享密钥。",
+            Summary = "启动 Echo 网页服务，可共享扩展接口",
             Example = domain + ".app.start port=8040",
             Parameters =
             [
@@ -140,7 +140,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".app.stop",
             Domain = domain,
             CommandClass = "app",
-            Summary = "停止 Echo 网页服务（页面与扩展随即连不上）；学习数据不受影响。",
+            Summary = "停止 Echo 网页服务，保留学习数据",
             Example = domain + ".app.stop",
             Handler = CommandDescriptor.Sync(_ => CommandResult.Ok(service.Stop() ? "网页服务已停止" : "网页服务本来就没在跑")),
         });
@@ -172,7 +172,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".dict.setup",
             Domain = domain,
             CommandClass = "dict",
-            Summary = "下载 ECDICT 英汉词典（约 66MB，分段续传）并建成离线查词库；已装好则直接返回。",
+            Summary = "下载英汉词典并建立离线查词库",
             Example = domain + ".dict.setup",
             Handler = async context =>
             {
@@ -189,7 +189,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".input.build",
             Domain = domain,
             CommandClass = "input",
-            Summary = "编译本机中文输入桥（C++，需 VS C++ Build Tools 与 Windows SDK）；已编译过的同版本直接复用。",
+            Summary = "编译或复用本机中文输入桥",
             Example = domain + ".input.build",
             Handler = async context =>
             {
@@ -228,7 +228,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".word.learn",
             Domain = domain,
             CommandClass = "word",
-            Summary = "把一个词标为学会（页面上不再带中文），learned=false 时取消；按原形记。",
+            Summary = "标记或取消标记已学会的词",
             Example = domain + ".word.learn word=went",
             Parameters =
             [
@@ -322,7 +322,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".conv.list",
             Domain = domain,
             CommandClass = "conv",
-            Summary = "列出对话历史（最近的在前）：编号、标题、最后一句与时间；q 在标题和全部消息里搜。",
+            Summary = "按最近活动列出或搜索对话",
             Example = domain + ".conv.list q=bank",
             Readonly = true,
             Parameters = [new ParameterSpec { Name = "q", Description = "搜索词，例如 bank；省略列出全部。", Position = 0 }],
@@ -356,7 +356,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".conv.new",
             Domain = domain,
             CommandClass = "conv",
-            Summary = "新建一段空对话放在历史最上面（已有一段还没说话的就复用它），返回编号。",
+            Summary = "新建或复用空对话并返回编号",
             Example = domain + ".conv.new",
             Handler = context => Guard(async () =>
             {
@@ -370,7 +370,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".conv.delete",
             Domain = domain,
             CommandClass = "conv",
-            Summary = "删除一段对话及其全部消息，删了找不回来；正在回复的那段要先停止。",
+            Summary = "永久删除一段对话及其消息",
             Example = domain + ".conv.delete id=12",
             Parameters = [new ParameterSpec { Name = "id", Description = "对话编号，取 echo.conv.list 的 id。", Type = ParamType.Int, Required = true, Position = 0 }],
             Handler = context => Guard(async () =>
@@ -388,7 +388,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".chat.send",
             Domain = domain,
             CommandClass = "chat",
-            Summary = "在一段对话里说一句英语，AI 按当前难度回复并逐词选释义，说完存进历史；默认发出即返回，回复在页面上边生成边显示。",
+            Summary = "发送英语消息，生成回复和逐词释义",
             Example = domain + ".chat.send conversation=12 text=\"I went to the bank yesterday.\" wait=true",
             Parameters =
             [
@@ -424,7 +424,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".chat.level",
             Domain = domain,
             CommandClass = "chat",
-            Summary = "设 AI 说话的难度（CEFR A1～C2+、CET-4/6、专四/专八、雅思 4.0～9.0），下一句起生效；省略只看当前。",
+            Summary = "查看或设置 AI 英语回复难度",
             Example = domain + ".chat.level level=B1",
             Parameters = [new ParameterSpec { Name = "level", Description = "难度显示名，例如 A2、CET-4、雅思 6.5；省略时只返回当前难度。", Position = 0 }],
             Handler = context => Guard(async () =>
