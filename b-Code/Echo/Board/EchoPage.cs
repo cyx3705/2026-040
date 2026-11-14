@@ -10,7 +10,7 @@ namespace Echo.Board;
 /// <remarks>
 /// 两页只靠选择通道 <see cref="ConversationChannel"/> 接线：历史页发布选中的对话，对话页按它取数、往它发。
 /// owner 与 scene 用 <see cref="EchoIdentity.PageOwner"/>；按钮、开关只绑 <see cref="Actions()"/> 里声明的动作 id，
-/// 动作指向的指令都由本模块注册（离线测试守着）。
+/// 业务指令由本模块注册，关闭浮层直接复用 Aurora 本地动作（离线测试守着）。
 /// </remarks>
 internal static class EchoPage
 {
@@ -351,8 +351,8 @@ internal static class EchoPage
             },
             new
             {
-                id = CloseDictionaryActionId, title = "关闭", command = CloseDictionaryActionId,
-                args = new Dictionary<string, string>(), summary = "关闭词典浮层",
+                id = CloseDictionaryActionId, title = "关闭", command = "aurora.ui.popup",
+                args = new Dictionary<string, string> { ["name"] = DictionaryPopupId, ["on"] = "false" }, summary = "关闭当前网页的词典浮层",
             },
         },
     }, Options);

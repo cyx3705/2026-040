@@ -120,7 +120,12 @@ static void TestAuroraPage()
     var actions = JsonNode.Parse(EchoPage.Actions())!["actions"]!.AsArray();
     var ids = actions.Select(a => a!["id"]!.GetValue<string>()).ToHashSet();
     foreach (var a in actions)
-        True(registry.TryGet(a!["command"]!.GetValue<string>(), out _), $"动作 {a["id"]} 指向未注册的指令");
+        True(registry.TryGet(a!["command"]!.GetValue<string>(), out _) || a["command"]!.GetValue<string>() == "aurora.ui.popup",
+            $"动作 {a["id"]} 指向未注册的指令");
+    var closeDictionary = actions.Single(a => a!["id"]!.GetValue<string>() == EchoPage.CloseDictionaryActionId)!;
+    Equal("aurora.ui.popup", closeDictionary["command"]!.GetValue<string>());
+    Equal(EchoPage.DictionaryPopupId, closeDictionary["args"]!["name"]!.GetValue<string>());
+    Equal("false", closeDictionary["args"]!["on"]!.GetValue<string>());
     // 页面里每个 action / commitAction 都要声明过
     var text = EchoPage.Describe("A2");
     foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"(?:action|commitAction|enterAction)\":\"([^\"]+)\""))
