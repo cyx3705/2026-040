@@ -218,7 +218,7 @@ internal static class EchoPage
                 id = DictionaryPageId,
                 title = "词典",
                 scene = EchoIdentity.PageOwner,
-                placement = new { side = "center", visible = false, singleton = true },
+                placement = new { side = "right", ratio = 0.34, visible = false, singleton = true },
                 content = new
                 {
                     type = "stack",

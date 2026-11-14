@@ -313,14 +313,19 @@ internal sealed class EchoBoard : IDisposable
 
     public async Task OpenDictionaryAsync(CancellationToken cancellation)
     {
-        _ = await _bus.InvokeAsync("aurora.ui.show name=" + EchoPage.DictionaryPageId, "Echo", cancellation).ConfigureAwait(false);
+        // Keep the history and chat panes mounted while the dictionary is open.
+        // Docking it on the right also makes closing it a reversible layout change.
+        _ = await _bus.InvokeAsync("aurora.ui.dock name=" + EchoPage.DictionaryPageId + " pos=right ratio=0.34", "Echo", cancellation).ConfigureAwait(false);
     }
 
     public async Task CloseDictionaryAsync(CancellationToken cancellation)
     {
         _ = await _bus.InvokeAsync("aurora.ui.hide name=" + EchoPage.DictionaryPageId, "Echo", cancellation).ConfigureAwait(false);
         _ = await _bus.InvokeAsync("aurora.ui.show name=" + EchoPage.HistoryPageId, "Echo", cancellation).ConfigureAwait(false);
-        _ = await _bus.InvokeAsync("aurora.ui.show name=" + EchoPage.ChatPageId, "Echo", cancellation).ConfigureAwait(false);
+        // A previous center-docked dictionary may have left chat's saved target
+        // pointing at the dictionary. Dock chat explicitly beside history so the
+        // close action repairs that layout as well as handling the normal case.
+        _ = await _bus.InvokeAsync("aurora.ui.dock name=" + EchoPage.ChatPageId + " pos=right ratio=0.72", "Echo", cancellation).ConfigureAwait(false);
     }
 
     /// <summary>气泡底下的释义行：按出现顺序、同一个词只列一次，学会的和查不到的不列。</summary>
