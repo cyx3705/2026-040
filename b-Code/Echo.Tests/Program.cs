@@ -84,7 +84,7 @@ static void TestCommandRegistration()
     var service = new EchoService(bus, _ => { });
     EchoModule.Register(registry, service, new EchoBoard(service.AppAsync, bus, _ => { }));
     string[] expected = ["app.status", "app.start", "app.stop", "dict.setup", "input.build", "word.list", "word.learn",
-        "ui.describe", "ui.actions", "ui.data", "conv.list", "conv.show", "conv.new", "conv.delete", "chat.send", "chat.stop", "chat.level", "chat.suggest", "chat.translate", "chat.accept"];
+        "ui.describe", "ui.actions", "ui.data", "conv.list", "conv.show", "conv.new", "conv.delete", "chat.send", "chat.stop", "chat.level", "chat.suggest", "chat.translate", "chat.accept", "dictionary.open", "dictionary.close"];
     foreach (var name in expected)
     {
         True(registry.TryGet("echo." + name, out var d), $"未注册 echo.{name}");
@@ -764,7 +764,7 @@ static async Task TestHostLoadsPackage()
         using var probe = JsonDocument.Parse(output);
         var module = probe.RootElement.GetProperty("data").GetProperty("module");
         True(module.GetProperty("attached").GetBoolean(), "宿主没有接上模块：" + output);
-        Equal(20, module.GetProperty("commandCount").GetInt32());
+        Equal(22, module.GetProperty("commandCount").GetInt32());
         True(probe.RootElement.GetProperty("data").GetProperty("result").GetProperty("success").GetBoolean(), output);
     }
     finally

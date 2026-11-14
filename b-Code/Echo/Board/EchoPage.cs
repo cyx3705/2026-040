@@ -15,8 +15,11 @@ internal static class EchoPage
 {
     public const string HistoryPageId = EchoIdentity.Domain + "-history";
     public const string ChatPageId = EchoIdentity.Domain + "-chat";
+    public const string DictionaryPageId = EchoIdentity.Domain + "-dictionary";
     public const string ToolPanelId = EchoIdentity.Domain + "-tools";
     public const string SendPanelId = EchoIdentity.Domain + "-send";
+    public const string DictionaryPanelId = EchoIdentity.Domain + "-dictionary-tools";
+    public const string DictionaryTableId = EchoIdentity.Domain + "-dictionary-list";
 
     /// <summary>会话卡片节点 id；对话说完、起好标题、新建或删除后重取它。</summary>
     public const string ConversationListId = EchoIdentity.Domain + "-conversations";
@@ -39,6 +42,7 @@ internal static class EchoPage
     public const string ViewLevel = "level";
     public const string ViewStandard = "standard";
     public const string ViewLength = "length";
+    public const string ViewDictionary = "dictionary";
 
     public const string NewActionId = EchoIdentity.Domain + ".conv.new";
     public const string DeleteActionId = EchoIdentity.Domain + ".conv.delete";
@@ -50,6 +54,10 @@ internal static class EchoPage
     public const string SuggestActionId = EchoIdentity.Domain + ".chat.suggest";
     public const string TranslateActionId = EchoIdentity.Domain + ".chat.translate";
     public const string AcceptSuggestionActionId = EchoIdentity.Domain + ".chat.accept";
+    public const string LearnWordActionId = EchoIdentity.Domain + ".word.learn-from-chat";
+    public const string UnlearnWordActionId = EchoIdentity.Domain + ".word.unlearn-from-dictionary";
+    public const string OpenDictionaryActionId = EchoIdentity.Domain + ".dictionary.open";
+    public const string CloseDictionaryActionId = EchoIdentity.Domain + ".dictionary.close";
 
     public const string DataCommand = EchoIdentity.Domain + ".ui.data";
 
@@ -127,6 +135,8 @@ internal static class EchoPage
                         {
                             type = "chatTimeline",
                             id = MessageListId,
+                            wordAction = LearnWordActionId,
+                            headerActions = new[] { new { action = OpenDictionaryActionId, title = "词典" } },
                             source = Selected("title"),
                             text = "选左边一段对话，或点「新对话」",
                             dataSource = new
@@ -188,6 +198,53 @@ internal static class EchoPage
                                         new { kind = "button", action = SendActionId, text = "发送" },
                                     },
                                 },
+                            },
+                        },
+                    },
+                },
+            },
+            new
+            {
+                id = DictionaryPageId,
+                title = "词典",
+                scene = EchoIdentity.PageOwner,
+                placement = new { side = "center", visible = false, singleton = true },
+                content = new
+                {
+                    type = "stack",
+                    gap = "tight",
+                    children = new object[]
+                    {
+                        new
+                        {
+                            type = "panel",
+                            id = DictionaryPanelId,
+                            text = "词典",
+                            rows = new object[]
+                            {
+                                new
+                                {
+                                    widgets = new object[]
+                                    {
+                                        new { kind = "text", text = "点过的词会直接收进这里；移出后，对话里会重新显示中文。", flex = true },
+                                        new { kind = "button", action = CloseDictionaryActionId, text = "关闭" },
+                                    },
+                                },
+                            },
+                        },
+                        new
+                        {
+                            type = "table",
+                            id = DictionaryTableId,
+                            dataSource = new { command = DataCommand, args = new { view = ViewDictionary } },
+                            columns = new object[]
+                            {
+                                new { key = "lemma", title = "单词", width = "*" },
+                                new { key = "gloss", title = "中文释义", width = "*" },
+                            },
+                            rowActions = new object[]
+                            {
+                                new { action = UnlearnWordActionId, title = "移出词典", style = "danger" },
                             },
                         },
                     },
@@ -258,6 +315,26 @@ internal static class EchoPage
             {
                 id = AcceptSuggestionActionId, title = "选词", command = AcceptSuggestionActionId,
                 args = new Dictionary<string, string> { ["value"] = "{value}", ["text"] = "{" + TextBoxId + "}" }, summary = "把候选词插入发送框并保留末尾空格",
+            },
+            new
+            {
+                id = LearnWordActionId, title = "标为已知", command = EchoIdentity.Domain + ".word.learn",
+                args = new Dictionary<string, string> { ["word"] = "{word}", ["learned"] = "true" }, summary = "点击回复中的单词后立即隐藏中文并收入词典",
+            },
+            new
+            {
+                id = UnlearnWordActionId, title = "移出词典", command = EchoIdentity.Domain + ".word.learn",
+                args = new Dictionary<string, string> { ["word"] = "{lemma}", ["learned"] = "false" }, summary = "从词典移出这个已知词",
+            },
+            new
+            {
+                id = OpenDictionaryActionId, title = "词典", command = OpenDictionaryActionId,
+                args = new Dictionary<string, string> { ["page"] = DictionaryPageId }, summary = "打开已知词典",
+            },
+            new
+            {
+                id = CloseDictionaryActionId, title = "关闭", command = CloseDictionaryActionId,
+                args = new Dictionary<string, string> { ["page"] = DictionaryPageId }, summary = "关闭词典页面",
             },
         },
     }, Options);

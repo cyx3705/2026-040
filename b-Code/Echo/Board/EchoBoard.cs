@@ -255,15 +255,33 @@ internal sealed class EchoBoard : IDisposable
                 row["words"] = new JsonArray(glosses
                     .Where(g => g["word"]?.GetValue<string>() is { Length: > 0 })
                     .Where(g => g["state"]?.GetValue<string>() != "missing")
-                    .Where(g => g["state"]?.GetValue<string>() != "skipped_learned" || g["gloss"]?.GetValue<string>()?.Length == 0)
-                    .Where(g => !learned.Contains(g["lemma"]?.GetValue<string>() ?? ""))
-                    .Select(g => (JsonNode)g.DeepClone()).ToArray());
+                    .Select(g =>
+                    {
+                        var copy = (JsonObject)g.DeepClone();
+                        var word = copy["word"]?.GetValue<string>() ?? "";
+                        var lemma = copy["lemma"]?.GetValue<string>() ?? "";
+                        var known = copy["state"]?.GetValue<string>() == "skipped_learned" || lemma.Length > 0 && learned.Contains(lemma);
+                        copy["learned"] = known;
+                        if (known && string.IsNullOrWhiteSpace(copy["gloss"]?.GetValue<string>()) && word.Length > 0)
+                            copy["gloss"] = app.Dictionary.Lookup(word)?.Gloss ?? "";
+                        return (JsonNode)copy;
+                    }).ToArray());
             }
             return row;
         }
     }
 
     public long CurrentConversation => _currentConversation;
+
+    public async Task OpenDictionaryAsync(CancellationToken cancellation)
+    {
+        _ = await _bus.InvokeAsync("aurora.ui.show page=" + EchoPage.DictionaryPageId, "Echo", cancellation).ConfigureAwait(false);
+    }
+
+    public async Task CloseDictionaryAsync(CancellationToken cancellation)
+    {
+        _ = await _bus.InvokeAsync("aurora.ui.hide page=" + EchoPage.DictionaryPageId, "Echo", cancellation).ConfigureAwait(false);
+    }
 
     /// <summary>气泡底下的释义行：按出现顺序、同一个词只列一次，学会的和查不到的不列。</summary>
     internal static string GlossLine(IEnumerable<JsonObject>? glosses, IReadOnlySet<string> learned)

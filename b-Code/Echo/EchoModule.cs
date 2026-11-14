@@ -267,6 +267,34 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
         registry.Register(Internal("describe", "返回会话历史与对话两页的页面描述",
             async context => Page(EchoPage.Describe(EchoBoard.LevelLabel(await board.LevelAsync(context.Cancellation).ConfigureAwait(false))))));
         registry.Register(Internal("actions", "返回两页的动作声明", _ => Task.FromResult(Page(EchoPage.Actions()))));
+        registry.Register(new CommandDescriptor
+        {
+            Name = EchoPage.OpenDictionaryActionId,
+            Domain = domain,
+            CommandClass = "dictionary",
+            Summary = "在 Aurora 标题栏右侧打开词典页面",
+            Example = EchoPage.OpenDictionaryActionId,
+            Parameters = [new ParameterSpec { Name = "page", Description = "由页面动作传入的词典页面 id，可省略。" }],
+            Handler = context => Guard(async () =>
+            {
+                await board.OpenDictionaryAsync(context.Cancellation).ConfigureAwait(false);
+                return CommandResult.Ok("已打开词典");
+            }),
+        });
+        registry.Register(new CommandDescriptor
+        {
+            Name = EchoPage.CloseDictionaryActionId,
+            Domain = domain,
+            CommandClass = "dictionary",
+            Summary = "关闭 Aurora 词典页面",
+            Example = EchoPage.CloseDictionaryActionId,
+            Parameters = [new ParameterSpec { Name = "page", Description = "由页面动作传入的词典页面 id，可省略。" }],
+            Handler = context => Guard(async () =>
+            {
+                await board.CloseDictionaryAsync(context.Cancellation).ConfigureAwait(false);
+                return CommandResult.Ok("已关闭词典");
+            }),
+        });
         registry.Register(Internal("data", "返回页面行集：会话卡片、气泡消息（含生成中的草稿）、难度候选",
             context => Guard(async () =>
             {
@@ -278,6 +306,8 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                         return CommandResult.Ok("分级类型", EchoBoard.StandardRows());
                     case EchoPage.ViewLength:
                         return CommandResult.Ok("回复长度", EchoBoard.LengthRows());
+                    case EchoPage.ViewDictionary:
+                        return CommandResult.Ok("词典", await board.DictionaryRowsAsync(context.Cancellation).ConfigureAwait(false));
                     case EchoPage.ViewSuggest:
                         var suggestId = TryId(context.GetString("conversation"), out var selectedSuggest)
                             ? selectedSuggest
@@ -296,14 +326,14 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                             return CommandResult.Ok("消息", Array.Empty<IReadOnlyDictionary<string, string>>());
                         return CommandResult.Ok("消息", await board.MessageRowsAsync(id, context.Cancellation).ConfigureAwait(false));
                     default:
-                        return CommandResult.Fail($"未知 view；支持 {EchoPage.ViewConversation} / {EchoPage.ViewMessage} / {EchoPage.ViewLevel} / {EchoPage.ViewStandard} / {EchoPage.ViewLength} / {EchoPage.ViewSuggest}");
+                        return CommandResult.Fail($"未知 view；支持 {EchoPage.ViewConversation} / {EchoPage.ViewMessage} / {EchoPage.ViewLevel} / {EchoPage.ViewStandard} / {EchoPage.ViewLength} / {EchoPage.ViewSuggest} / {EchoPage.ViewDictionary}");
                 }
             }),
             [
                 new ParameterSpec
                 {
                     Name = "view", Description = "取哪组行：conversation 会话卡片、message 气泡消息、level 难度候选。", Position = 0,
-                    AllowedValues = [EchoPage.ViewConversation, EchoPage.ViewMessage, EchoPage.ViewLevel, EchoPage.ViewStandard, EchoPage.ViewLength, EchoPage.ViewSuggest],
+                    AllowedValues = [EchoPage.ViewConversation, EchoPage.ViewMessage, EchoPage.ViewLevel, EchoPage.ViewStandard, EchoPage.ViewLength, EchoPage.ViewSuggest, EchoPage.ViewDictionary],
                 },
                 new ParameterSpec { Name = "q", Description = "会话搜索词，在标题和全部消息里找；空串或省略列出全部。" },
                 new ParameterSpec { Name = "conversation", Description = "消息视图的对话编号；没选中时给空表。" },
