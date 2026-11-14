@@ -19,6 +19,9 @@ internal sealed class EchoBoard : IDisposable
     private const string LevelSetting = "aurora_level";
     private const string LengthSetting = "aurora_length";
     private const string StandardSetting = "aurora_standard";
+    private const string CandidateCountSetting = "suggest_candidates";
+    private const int DefaultCandidateCount = 5;
+    private const int MaxCandidateCount = 20;
 
     private readonly Func<CancellationToken, Task<EchoApp>> _app;
     private readonly ICommandBus _bus;
@@ -77,6 +80,22 @@ internal sealed class EchoBoard : IDisposable
         return int.TryParse(app.Store.Setting(LengthSetting, "2"), out var value) && value is >= 1 and <= 4 ? value : 2;
     }
 
+    public async Task<int> CandidateCountAsync(CancellationToken cancellation)
+    {
+        var app = await _app(cancellation).ConfigureAwait(false);
+        return int.TryParse(app.Store.Setting(CandidateCountSetting, DefaultCandidateCount.ToString(CultureInfo.InvariantCulture)), out var value)
+            && value is >= 1 and <= MaxCandidateCount ? value : DefaultCandidateCount;
+    }
+
+    public async Task<int?> SetCandidateCountAsync(string value, CancellationToken cancellation)
+    {
+        if (!int.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var count) || count is < 1 or > MaxCandidateCount)
+            return null;
+        var app = await _app(cancellation).ConfigureAwait(false);
+        app.Store.SetSetting(CandidateCountSetting, count.ToString(CultureInfo.InvariantCulture));
+        return count;
+    }
+
     public async Task<string?> SetLengthAsync(string value, CancellationToken cancellation)
     {
         value = value.Trim();
@@ -112,11 +131,24 @@ internal sealed class EchoBoard : IDisposable
     public static IReadOnlyList<IReadOnlyDictionary<string, string>> LengthRows()
         => Levels.Lengths.Select(x => (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["value"] = x.Name }).ToList();
 
+    public static IReadOnlyList<IReadOnlyDictionary<string, string>> CandidateCountRows()
+        => Enumerable.Range(1, MaxCandidateCount)
+            .Select(count => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>
+            {
+                ["value"] = count.ToString(CultureInfo.InvariantCulture),
+                ["text"] = count.ToString(CultureInfo.InvariantCulture) + " 个",
+            }).ToList();
+
     public async Task<JsonArray> SuggestAsync(long conversation, string text, CancellationToken cancellation)
     {
         var app = await _app(cancellation).ConfigureAwait(false);
         var conv = app.Store.Get(conversation) ?? throw new InvalidOperationException("没有这段对话");
-        var body = new JsonObject { ["messages"] = new JsonArray(EchoApp.Turns(conv["messages"]).Select(m => (JsonNode)m.ToJson()).ToArray()), ["text"] = text, ["candidates"] = 20 };
+        var body = new JsonObject
+        {
+            ["messages"] = new JsonArray(EchoApp.Turns(conv["messages"]).Select(m => (JsonNode)m.ToJson()).ToArray()),
+            ["text"] = text,
+            ["candidates"] = await CandidateCountAsync(cancellation).ConfigureAwait(false),
+        };
         return await app.SuggestForAuroraAsync(body, cancellation).ConfigureAwait(false);
     }
 
@@ -164,6 +196,12 @@ internal sealed class EchoBoard : IDisposable
         {
             ["lemma"] = w.Lemma, ["gloss"] = w.Gloss,
         }).ToList();
+    }
+
+    public async Task<int> LearnedCountAsync(CancellationToken cancellation)
+    {
+        var app = await _app(cancellation).ConfigureAwait(false);
+        return app.Dictionary.Learned().Count;
     }
 
     public static IReadOnlyList<IReadOnlyDictionary<string, string>> LevelRows()

@@ -35,6 +35,7 @@ internal static class EchoPage
     public const string StandardBoxId = "standard";
     public const string LevelBoxId = "level";
     public const string LengthBoxId = "length";
+    public const string CandidateCountBoxId = "candidate-count";
 
     public const string ViewConversation = "conversation";
     public const string ViewMessage = "message";
@@ -42,6 +43,7 @@ internal static class EchoPage
     public const string ViewLevel = "level";
     public const string ViewStandard = "standard";
     public const string ViewLength = "length";
+    public const string ViewCandidateCount = "candidate-count";
     public const string ViewDictionary = "dictionary";
 
     public const string NewActionId = EchoIdentity.Domain + ".conv.new";
@@ -51,6 +53,7 @@ internal static class EchoPage
     public const string LevelActionId = EchoIdentity.Domain + ".chat.level";
     public const string StandardActionId = EchoIdentity.Domain + ".chat.standard";
     public const string LengthActionId = EchoIdentity.Domain + ".chat.length";
+    public const string CandidateCountActionId = EchoIdentity.Domain + ".chat.candidates";
     public const string SuggestActionId = EchoIdentity.Domain + ".chat.suggest";
     public const string TranslateActionId = EchoIdentity.Domain + ".chat.translate";
     public const string AcceptSuggestionActionId = EchoIdentity.Domain + ".chat.accept";
@@ -66,7 +69,7 @@ internal static class EchoPage
     private static string Selected(string column) => "{selection." + ConversationChannel + "." + column + "}";
 
     /// <summary>页面描述；<paramref name="level"/> 是难度选项框的初值（显示名）。</summary>
-    public static string Describe(string level) => JsonSerializer.Serialize(new
+    public static string Describe(string level, int candidateCount = 5, int learnedCount = 0) => JsonSerializer.Serialize(new
     {
         schemaVersion = 1,
         owner = EchoIdentity.PageOwner,
@@ -168,6 +171,8 @@ internal static class EchoPage
                                             kind = "choices", id = "suggestions", label = "", flex = true,
                                             optionsSource = new { command = DataCommand, args = new Dictionary<string, string> { ["view"] = ViewSuggest, ["conversation"] = Selected("id"), ["text"] = "{selection." + ComposerChannel + ".value}" } },
                                             commitAction = AcceptSuggestionActionId,
+                                            keyboard = true,
+                                            keyboardTarget = TextBoxId,
                                         },
                                     },
                                 },
@@ -193,7 +198,12 @@ internal static class EchoPage
                                             commitAction = LengthActionId,
                                             optionsSource = new { command = DataCommand, args = new { view = ViewLength } },
                                         },
-                                        new { kind = "text", text = "Shift+空格或 Tab 选词 · Enter 发送 · Shift+Enter 换行", flex = true },
+                                        new
+                                        {
+                                            kind = "textbox", id = CandidateCountBoxId, label = "选词数量", mode = "select",
+                                            value = candidateCount.ToString(), minWidth = 96, commitAction = CandidateCountActionId,
+                                            optionsSource = new { command = DataCommand, args = new { view = ViewCandidateCount } },
+                                        },
                                         new { kind = "button", action = StopActionId, text = "停止" },
                                         new { kind = "button", action = SendActionId, text = "发送" },
                                     },
@@ -226,7 +236,7 @@ internal static class EchoPage
                                 {
                                     widgets = new object[]
                                     {
-                                        new { kind = "text", text = "点过的词会直接收进这里；移出后，对话里会重新显示中文。", flex = true },
+                                        new { kind = "text", text = "已熟单词：" + learnedCount, flex = true },
                                         new { kind = "button", action = CloseDictionaryActionId, text = "关闭" },
                                     },
                                 },
@@ -300,6 +310,11 @@ internal static class EchoPage
                 id = LengthActionId, title = "回复长度", command = EchoIdentity.Domain + ".chat.level",
                 args = new Dictionary<string, string> { ["length"] = "{value}" },
                 summary = "选择一句话、人类、长篇或故事等回复长度",
+            },
+            new
+            {
+                id = CandidateCountActionId, title = "选词数量", command = CandidateCountActionId,
+                args = new Dictionary<string, string> { ["count"] = "{value}" }, summary = "设置输入候选显示数量（1 到 20 个）",
             },
             new
             {

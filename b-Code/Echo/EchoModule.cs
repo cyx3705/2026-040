@@ -265,7 +265,10 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
         const string domain = EchoIdentity.Domain;
 
         registry.Register(Internal("describe", "返回会话历史与对话两页的页面描述",
-            async context => Page(EchoPage.Describe(EchoBoard.LevelLabel(await board.LevelAsync(context.Cancellation).ConfigureAwait(false))))));
+            async context => Page(EchoPage.Describe(
+                EchoBoard.LevelLabel(await board.LevelAsync(context.Cancellation).ConfigureAwait(false)),
+                await board.CandidateCountAsync(context.Cancellation).ConfigureAwait(false),
+                await board.LearnedCountAsync(context.Cancellation).ConfigureAwait(false)))));
         registry.Register(Internal("actions", "返回两页的动作声明", _ => Task.FromResult(Page(EchoPage.Actions()))));
         registry.Register(new CommandDescriptor
         {
@@ -306,6 +309,8 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                         return CommandResult.Ok("分级类型", EchoBoard.StandardRows());
                     case EchoPage.ViewLength:
                         return CommandResult.Ok("回复长度", EchoBoard.LengthRows());
+                    case EchoPage.ViewCandidateCount:
+                        return CommandResult.Ok("选词数量", EchoBoard.CandidateCountRows());
                     case EchoPage.ViewDictionary:
                         return CommandResult.Ok("词典", await board.DictionaryRowsAsync(context.Cancellation).ConfigureAwait(false));
                     case EchoPage.ViewSuggest:
@@ -326,14 +331,14 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                             return CommandResult.Ok("消息", Array.Empty<IReadOnlyDictionary<string, string>>());
                         return CommandResult.Ok("消息", await board.MessageRowsAsync(id, context.Cancellation).ConfigureAwait(false));
                     default:
-                        return CommandResult.Fail($"未知 view；支持 {EchoPage.ViewConversation} / {EchoPage.ViewMessage} / {EchoPage.ViewLevel} / {EchoPage.ViewStandard} / {EchoPage.ViewLength} / {EchoPage.ViewSuggest} / {EchoPage.ViewDictionary}");
+                        return CommandResult.Fail($"未知 view；支持 {EchoPage.ViewConversation} / {EchoPage.ViewMessage} / {EchoPage.ViewLevel} / {EchoPage.ViewStandard} / {EchoPage.ViewLength} / {EchoPage.ViewCandidateCount} / {EchoPage.ViewSuggest} / {EchoPage.ViewDictionary}");
                 }
             }),
             [
                 new ParameterSpec
                 {
                     Name = "view", Description = "取哪组行：conversation 会话卡片、message 气泡消息、level 难度候选。", Position = 0,
-                    AllowedValues = [EchoPage.ViewConversation, EchoPage.ViewMessage, EchoPage.ViewLevel, EchoPage.ViewStandard, EchoPage.ViewLength, EchoPage.ViewSuggest, EchoPage.ViewDictionary],
+                    AllowedValues = [EchoPage.ViewConversation, EchoPage.ViewMessage, EchoPage.ViewLevel, EchoPage.ViewStandard, EchoPage.ViewLength, EchoPage.ViewCandidateCount, EchoPage.ViewSuggest, EchoPage.ViewDictionary],
                 },
                 new ParameterSpec { Name = "q", Description = "会话搜索词，在标题和全部消息里找；空串或省略列出全部。" },
                 new ParameterSpec { Name = "conversation", Description = "消息视图的对话编号；没选中时给空表。" },
@@ -481,6 +486,21 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                 return label is null
                     ? CommandResult.Fail("认不出这个难度；可选：" + string.Join("、", Levels.Choices().Select(c => c.Label)))
                     : CommandResult.Ok("难度改为 " + label);
+            }),
+        });
+
+        registry.Register(new CommandDescriptor
+        {
+            Name = EchoPage.CandidateCountActionId,
+            Domain = domain,
+            CommandClass = "chat",
+            Summary = "设置 Aurora 输入候选显示数量",
+            Example = EchoPage.CandidateCountActionId + " count=5",
+            Parameters = [new ParameterSpec { Name = "count", Description = "输入候选数量，范围 1 到 20。", Required = true, Position = 0, Type = ParamType.Int }],
+            Handler = context => Guard(async () =>
+            {
+                var count = await board.SetCandidateCountAsync(context.RequireString("count"), context.Cancellation).ConfigureAwait(false);
+                return count is null ? CommandResult.Fail("选词数量必须在 1 到 20 之间") : CommandResult.Ok("选词数量改为 " + count);
             }),
         });
 
