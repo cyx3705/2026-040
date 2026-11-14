@@ -159,7 +159,7 @@ internal static class EchoPage
                                 {
                                     widgets = new object[]
                                     {
-                                        new { kind = "textbox", id = TextBoxId, label = "", multiline = true, flex = true, channel = ComposerChannel },
+                                        new { kind = "textbox", id = TextBoxId, label = "", multiline = true, flex = true, channel = ComposerChannel, enterAction = SendActionId },
                                     },
                                 },
                                 new

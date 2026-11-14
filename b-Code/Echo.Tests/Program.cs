@@ -117,8 +117,9 @@ static void TestAuroraPage()
         True(registry.TryGet(a!["command"]!.GetValue<string>(), out _), $"动作 {a["id"]} 指向未注册的指令");
     // 页面里每个 action / commitAction 都要声明过
     var text = EchoPage.Describe("A2");
-    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"(?:action|commitAction)\":\"([^\"]+)\""))
+    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"(?:action|commitAction|enterAction)\":\"([^\"]+)\""))
         True(ids.Contains(m.Groups[1].Value), $"页面绑了未声明的动作 {m.Groups[1].Value}");
+    True(text.Contains("\"enterAction\":\"" + EchoPage.SendActionId + "\"", StringComparison.Ordinal), "INPUT-011：Enter 绑定发送动作");
     foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"command\":\"([^\"]+)\""))
         True(registry.TryGet(m.Groups[1].Value, out _), $"页面取数指令 {m.Groups[1].Value} 未注册");
     var sendArgs = actions.First(a => a!["id"]!.GetValue<string>() == EchoPage.SendActionId)!["args"]!;
