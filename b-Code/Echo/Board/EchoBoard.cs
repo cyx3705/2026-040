@@ -281,6 +281,7 @@ internal sealed class EchoBoard : IDisposable
     public async Task CloseDictionaryAsync(CancellationToken cancellation)
     {
         _ = await _bus.InvokeAsync("aurora.ui.hide name=" + EchoPage.DictionaryPageId, "Echo", cancellation).ConfigureAwait(false);
+        _ = await _bus.InvokeAsync("aurora.ui.show name=" + EchoPage.ChatPageId, "Echo", cancellation).ConfigureAwait(false);
     }
 
     /// <summary>气泡底下的释义行：按出现顺序、同一个词只列一次，学会的和查不到的不列。</summary>
