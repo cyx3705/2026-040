@@ -121,6 +121,8 @@ static void TestAuroraPage()
         True(ids.Contains(m.Groups[1].Value), $"页面绑了未声明的动作 {m.Groups[1].Value}");
     foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"command\":\"([^\"]+)\""))
         True(registry.TryGet(m.Groups[1].Value, out _), $"页面取数指令 {m.Groups[1].Value} 未注册");
+    True(!text.Contains("selection.echo.conversation.id", StringComparison.Ordinal), "未选会话时页面不能发送未解析的会话占位符");
+    True(text.Contains("\"view\":\"suggest\"", StringComparison.Ordinal), "发送栏声明候选取数视图");
     True(EchoBoard.LevelRows().Any(r => r["value"] == "雅思 6.5"), "难度候选含雅思");
     Equal("CET-4", EchoBoard.LevelLabel("cet:4"));
 }

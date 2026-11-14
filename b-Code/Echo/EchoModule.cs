@@ -279,14 +279,20 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                     case EchoPage.ViewLength:
                         return CommandResult.Ok("回复长度", EchoBoard.LengthRows());
                     case EchoPage.ViewSuggest:
-                        if (!TryId(context.GetString("conversation"), out var suggestId))
+                        var suggestId = TryId(context.GetString("conversation"), out var selectedSuggest)
+                            ? selectedSuggest
+                            : board.CurrentConversation;
+                        if (suggestId <= 0)
                             return CommandResult.Ok("候选", Array.Empty<IReadOnlyDictionary<string, string>>());
                         return CommandResult.Ok("候选", await board.SuggestRowsAsync(suggestId, context.GetString("text") ?? "", context.Cancellation).ConfigureAwait(false));
                     case EchoPage.ViewConversation:
                         return CommandResult.Ok("对话", await board.ConversationRowsAsync(context.GetString("q"), context.Cancellation).ConfigureAwait(false));
                     case EchoPage.ViewMessage:
                         // 还没选对话：给空表，不算失败（不往控制台刷红字）
-                        if (!TryId(context.GetString("conversation"), out var id))
+                        var id = TryId(context.GetString("conversation"), out var selectedConversation)
+                            ? selectedConversation
+                            : board.CurrentConversation;
+                        if (id <= 0)
                             return CommandResult.Ok("消息", Array.Empty<IReadOnlyDictionary<string, string>>());
                         return CommandResult.Ok("消息", await board.MessageRowsAsync(id, context.Cancellation).ConfigureAwait(false));
                     default:

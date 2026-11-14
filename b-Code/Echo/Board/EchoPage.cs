@@ -127,12 +127,12 @@ internal static class EchoPage
                         {
                             type = "chatTimeline",
                             id = MessageListId,
-                            source = Selected("title"),
+                            source = "Echo 对话",
                             text = "选左边一段对话，或点「新对话」",
                             dataSource = new
                             {
                                 command = DataCommand,
-                                args = new Dictionary<string, string> { ["view"] = ViewMessage, ["conversation"] = Selected("id") },
+                                args = new Dictionary<string, string> { ["view"] = ViewMessage },
                             },
                         },
                         new
@@ -156,7 +156,7 @@ internal static class EchoPage
                                         new
                                         {
                                             kind = "choices", id = "suggestions", label = "", flex = true,
-                                            optionsSource = new { command = DataCommand, args = new Dictionary<string, string> { ["view"] = ViewSuggest, ["conversation"] = Selected("id"), ["text"] = "{selection." + ComposerChannel + ".value}" } },
+                                            optionsSource = new { command = DataCommand, args = new Dictionary<string, string> { ["view"] = ViewSuggest, ["text"] = "{selection." + ComposerChannel + ".value}" } },
                                             commitAction = AcceptSuggestionActionId,
                                         },
                                     },

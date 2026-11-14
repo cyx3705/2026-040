@@ -282,7 +282,9 @@ internal sealed class EchoBoard : IDisposable
     {
         var app = await _app(cancellation).ConfigureAwait(false);
         var id = app.Store.NewConversation(await LevelAsync(cancellation).ConfigureAwait(false));
+        _currentConversation = id;
         await RefreshAsync(EchoPage.ConversationListId).ConfigureAwait(false);
+        await RefreshAsync(EchoPage.MessageListId).ConfigureAwait(false);
         return id;
     }
 
