@@ -1,4 +1,4 @@
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using Echo.Learning;
 
@@ -16,7 +16,7 @@ internal static class EchoPage
 {
     public const string HistoryPageId = EchoIdentity.Domain + "-history";
     public const string ChatPageId = EchoIdentity.Domain + "-chat";
-    public const string DictionaryPageId = EchoIdentity.Domain + "-dictionary";
+    public const string DictionaryPopupId = EchoIdentity.Domain + "-dictionary";
     public const string ToolPanelId = EchoIdentity.Domain + "-tools";
     public const string SendPanelId = EchoIdentity.Domain + "-send";
     public const string DictionaryPanelId = EchoIdentity.Domain + "-dictionary-tools";
@@ -141,7 +141,7 @@ internal static class EchoPage
                             type = "chatTimeline",
                             id = MessageListId,
                             wordAction = LearnWordActionId,
-                            headerActions = new[] { new { action = OpenDictionaryActionId, title = "词典" } },
+                            headerActions = new[] { new { popup = DictionaryPopup(learnedCount) } },
                             source = Selected("title"),
                             text = "选左边一段对话，或点「新对话」",
                             dataSource = new
@@ -216,55 +216,55 @@ internal static class EchoPage
                     },
                 },
             },
-            new
+        },
+    }, Options);
+
+    private static object DictionaryPopup(int learnedCount) => new
+    {
+        type = "popup",
+        id = DictionaryPopupId,
+        text = "词典",
+        content = new
+        {
+            type = "stack",
+            gap = "tight",
+            children = new object[]
             {
-                id = DictionaryPageId,
-                title = "词典",
-                scene = EchoIdentity.PageOwner,
-                placement = new { side = "right", ratio = 0.34, visible = false, singleton = true },
-                content = new
+                new
                 {
-                    type = "stack",
-                    gap = "tight",
-                    children = new object[]
+                    type = "panel",
+                    id = DictionaryPanelId,
+                    text = "词典",
+                    rows = new object[]
                     {
                         new
                         {
-                            type = "panel",
-                            id = DictionaryPanelId,
-                            text = "词典",
-                            rows = new object[]
+                            widgets = new object[]
                             {
-                                new
-                                {
-                                    widgets = new object[]
-                                    {
-                                        new { kind = "text", text = "已熟单词：" + learnedCount, flex = true },
-                                        new { kind = "button", action = CloseDictionaryActionId, text = "关闭" },
-                                    },
-                                },
-                            },
-                        },
-                        new
-                        {
-                            type = "table",
-                            id = DictionaryTableId,
-                            dataSource = new { command = DataCommand, args = new { view = ViewDictionary } },
-                            columns = new object[]
-                            {
-                                new { key = "lemma", title = "单词", width = "*" },
-                                new { key = "gloss", title = "中文释义", width = "*" },
-                            },
-                            rowActions = new object[]
-                            {
-                                new { action = UnlearnWordActionId, title = "移出词典", style = "danger" },
+                                new { kind = "text", text = "已熟单词：" + learnedCount, flex = true },
+                                new { kind = "button", action = CloseDictionaryActionId, text = "关闭" },
                             },
                         },
                     },
                 },
+                new
+                {
+                    type = "table",
+                    id = DictionaryTableId,
+                    dataSource = new { command = DataCommand, args = new { view = ViewDictionary } },
+                    columns = new object[]
+                    {
+                        new { key = "lemma", title = "单词", width = "*" },
+                        new { key = "gloss", title = "中文释义", width = "*" },
+                    },
+                    rowActions = new object[]
+                    {
+                        new { action = UnlearnWordActionId, title = "移出词典", style = "danger" },
+                    },
+                },
             },
         },
-    }, Options);
+    };
 
     /// <summary>动作声明。</summary>
     public static string Actions() => JsonSerializer.Serialize(new
@@ -347,12 +347,12 @@ internal static class EchoPage
             new
             {
                 id = OpenDictionaryActionId, title = "词典", command = OpenDictionaryActionId,
-                args = new Dictionary<string, string> { ["page"] = DictionaryPageId }, summary = "打开已知词典",
+                args = new Dictionary<string, string>(), summary = "打开标题栏右上角的已知词典浮层",
             },
             new
             {
                 id = CloseDictionaryActionId, title = "关闭", command = CloseDictionaryActionId,
-                args = new Dictionary<string, string> { ["page"] = DictionaryPageId }, summary = "关闭词典页面",
+                args = new Dictionary<string, string>(), summary = "关闭词典浮层",
             },
         },
     }, Options);

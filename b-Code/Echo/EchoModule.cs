@@ -276,9 +276,8 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = EchoPage.OpenDictionaryActionId,
             Domain = domain,
             CommandClass = "dictionary",
-            Summary = "在 Aurora 标题栏右侧打开词典页面",
+            Summary = "在 Aurora 对话标题栏右上角打开词典浮层",
             Example = EchoPage.OpenDictionaryActionId,
-            Parameters = [new ParameterSpec { Name = "page", Description = "由页面动作传入的词典页面 id，可省略。" }],
             Handler = context => Guard(async () =>
             {
                 await board.OpenDictionaryAsync(context.Cancellation).ConfigureAwait(false);
@@ -290,9 +289,8 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = EchoPage.CloseDictionaryActionId,
             Domain = domain,
             CommandClass = "dictionary",
-            Summary = "关闭 Aurora 词典页面",
+            Summary = "关闭 Aurora 词典浮层，不改变会话布局",
             Example = EchoPage.CloseDictionaryActionId,
-            Parameters = [new ParameterSpec { Name = "page", Description = "由页面动作传入的词典页面 id，可省略。" }],
             Handler = context => Guard(async () =>
             {
                 await board.CloseDictionaryAsync(context.Cancellation).ConfigureAwait(false);

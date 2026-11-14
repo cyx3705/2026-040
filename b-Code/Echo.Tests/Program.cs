@@ -112,6 +112,11 @@ static void TestAuroraPage()
     foreach (var p in page["pages"]!.AsArray())
         Equal(EchoIdentity.PageOwner, p!["scene"]!.GetValue<string>());
     Equal("left", page["pages"]![0]!["placement"]!["side"]!.GetValue<string>());
+    Equal(2, page["pages"]!.AsArray().Count);
+    var dictionary = page["pages"]![1]!["content"]!["children"]![0]!["headerActions"]![0]!["popup"]!;
+    Equal("popup", dictionary["type"]!.GetValue<string>());
+    Equal(EchoPage.DictionaryPopupId, dictionary["id"]!.GetValue<string>());
+    Equal(EchoPage.DictionaryTableId, dictionary["content"]!["children"]![1]!["id"]!.GetValue<string>());
     var actions = JsonNode.Parse(EchoPage.Actions())!["actions"]!.AsArray();
     var ids = actions.Select(a => a!["id"]!.GetValue<string>()).ToHashSet();
     foreach (var a in actions)
@@ -255,6 +260,11 @@ static async Task TestBoardChatAsync()
     Equal(null, app.Store.Get(id));
     True(!await board.DeleteAsync(id, CancellationToken.None), "删两次");
     Equal("", EchoBoard.GlossLine([new JsonObject { ["word"] = "go", ["gloss"] = "去", ["lemma"] = "go" }], new HashSet<string> { "go" }));
+    var beforeDictionary = bus.Commands.Count;
+    await board.OpenDictionaryAsync(CancellationToken.None);
+    await board.CloseDictionaryAsync(CancellationToken.None);
+    Equal("aurora.ui.popup name=echo-dictionary on=true|aurora.ui.popup name=echo-dictionary on=false",
+        string.Join("|", bus.Commands.Skip(beforeDictionary)));
 }
 
 static async Task Expect<T>(Func<Task> body) where T : Exception
