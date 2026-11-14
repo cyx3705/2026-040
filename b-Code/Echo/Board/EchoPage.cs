@@ -217,7 +217,7 @@ internal static class EchoPage
             new
             {
                 id = SendActionId, title = "发送", command = SendActionId,
-                args = new Dictionary<string, string> { ["conversation"] = Selected("id"), ["text"] = "{" + TextBoxId + "}" },
+                args = new Dictionary<string, string> { ["text"] = "{" + TextBoxId + "}" },
                 clearOnSuccess = new[] { TextBoxId },
                 summary = "把这句话发给 AI；回复边生成边显示，说完附上逐词释义",
             },
