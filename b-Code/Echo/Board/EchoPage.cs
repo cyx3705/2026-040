@@ -185,7 +185,7 @@ internal static class EchoPage
                                         },
                                         new { kind = "text", text = "Shift+空格或 Tab 选词 · Enter 发送 · Shift+Enter 换行", flex = true },
                                         new { kind = "button", action = StopActionId, text = "停止" },
-                                        new { kind = "button", action = SendActionId, text = "发送", enabledWhen = new { selected = ConversationChannel } },
+                                        new { kind = "button", action = SendActionId, text = "发送" },
                                     },
                                 },
                             },

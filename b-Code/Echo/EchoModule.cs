@@ -385,8 +385,11 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             ],
             Handler = context => Guard(async () =>
             {
-                if (!TryId(context.RequireString("conversation"), out var id))
-                    return CommandResult.Fail("conversation 要是正整数");
+                var id = TryId(context.GetString("conversation"), out var selected)
+                    ? selected
+                    : board.CurrentConversation;
+                if (id <= 0)
+                    id = await board.NewConversationAsync(context.Cancellation).ConfigureAwait(false);
                 var finished = await board.SendAsync(id, context.RequireString("text"), context.Cancellation).ConfigureAwait(false);
                 if (!context.GetBool("wait", false))
                     return CommandResult.Ok("已发送，AI 正在回复");
