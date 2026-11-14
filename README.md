@@ -6,7 +6,7 @@ Echo（2026-040）是 HistoryVulcan 的宿主模块（域 `echo`）。界面在 
 
 ## 能力与当前边界
 
-- Aurora 页面（`echo-history` / `echo-chat`）：会话卡片带搜索、新对话、删除；对话气泡边生成边显示，说完在 AI 那句下面附「释义：词 中文 · …」；可选难度、可停止。指令 `echo.conv.list/show/new/delete`、`echo.chat.send/stop/level`，AI 也能直接调。
+- Aurora 页面（`echo-history` / `echo-chat`）：会话卡片带搜索、新对话、删除；对话气泡边生成边显示，AI 回复按网页端逐词上下排版（英文在上、中文释义在下）；可选难度、可停止。指令 `echo.conv.list/show/new/delete`、`echo.chat.send/stop/level`，AI 也能直接调。
 - 英语对话、难度 A1～C2+/国内考试/雅思档位、回答长度、对话历史与搜索、自动中文标题、Word 单词表练词。
 - 对话流式输出英文；每说完一个词就选取中文释义。服务支持共享 KV 时，A 在服务里持续生成，每个词在 A 上分叉 B 选义（`ratio.seq.*`），否则说完后用 JSON Schema 约束的普通请求逐词选义。每轮最多 8 个多义词，超出或失败保留带退化标记的词典释义。断流未完成时不保存半截回复。
 - 输入预测按用户回合读取下一 token 前 20 个候选（`ratio.local.probs`），经词典过滤/去重、半词补全后显示 1～20 个候选；45 秒等不到算超时。

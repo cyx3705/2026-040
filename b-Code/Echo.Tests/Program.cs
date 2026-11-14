@@ -151,14 +151,15 @@ static async Task TestBoardChatAsync()
 
     var finished = await board.SendAsync(id, "hi", CancellationToken.None);
     var during = await board.MessageRowsAsync(id, CancellationToken.None);
-    Equal("out", during[0]["direction"]);
-    Equal("hi", during[0]["text"]);
+    Equal("out", during[0]["direction"]!.GetValue<string>());
+    Equal("hi", during[0]["text"]!.GetValue<string>());
     Equal("I went to the bank.", await finished);
     var rows = await board.MessageRowsAsync(id, CancellationToken.None);
     Equal(2, rows.Count);
-    Equal("in", rows[1]["direction"]);
-    True(rows[1]["text"].StartsWith("I went to the bank.\n\n释义：", StringComparison.Ordinal), rows[1]["text"]);
-    True(rows[1]["text"].Contains("bank 银行"), rows[1]["text"]);
+    Equal("in", rows[1]["direction"]!.GetValue<string>());
+    Equal("I went to the bank.", rows[1]["text"]!.GetValue<string>());
+    var words = rows[1]["words"]!.AsArray();
+    True(words.OfType<JsonObject>().Any(word => word["word"]?.GetValue<string>() == "bank" && word["gloss"]?.GetValue<string>() == "银行"), "Aurora 行数据必须保留逐词释义");
     Equal("cet:4", app.Store.Get(id)!["level"]!.GetValue<string>());
     True(bus.Commands.Contains("aurora.ui.refreshdata node=" + EchoPage.MessageListId), "说完刷新时间线");
     await Task.Delay(100);

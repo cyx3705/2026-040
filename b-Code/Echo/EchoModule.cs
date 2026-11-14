@@ -331,7 +331,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".conv.show",
             Domain = domain,
             CommandClass = "conv",
-            Summary = "看一段对话的全部消息；AI 的每句后面附逐词释义行。",
+            Summary = "看一段对话的全部消息；AI 回复按逐词上下排版并附中文释义。",
             Example = domain + ".conv.show id=12",
             Readonly = true,
             Parameters = [new ParameterSpec { Name = "id", Description = "对话编号，取 echo.conv.list 的 id。", Type = ParamType.Int, Required = true, Position = 0 }],
@@ -401,7 +401,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                     return CommandResult.Ok("已发送，AI 正在回复");
                 var reply = await finished.ConfigureAwait(false);
                 var rows = await board.MessageRowsAsync(id, CancellationToken.None).ConfigureAwait(false);
-                return CommandResult.Ok(rows.Count > 0 ? rows[^1]["text"] : reply, Ok(new { conversation = id, reply }));
+                return CommandResult.Ok(rows.Count > 0 ? rows[^1]["text"]?.GetValue<string>() ?? reply : reply, Ok(new { conversation = id, reply }));
             }),
         });
 

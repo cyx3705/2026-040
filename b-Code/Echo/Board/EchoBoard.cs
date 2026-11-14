@@ -206,11 +206,11 @@ internal sealed class EchoBoard : IDisposable
             : t.ToString("yyyy-M-d", CultureInfo.InvariantCulture);
     }
 
-    public async Task<IReadOnlyList<IReadOnlyDictionary<string, string>>> MessageRowsAsync(long conversation, CancellationToken cancellation)
+    public async Task<IReadOnlyList<JsonObject>> MessageRowsAsync(long conversation, CancellationToken cancellation)
     {
         _currentConversation = conversation;
         var app = await _app(cancellation).ConfigureAwait(false);
-        var rows = new List<IReadOnlyDictionary<string, string>>();
+        var rows = new List<JsonObject>();
         var conv = app.Store.Get(conversation);
         var stored = EchoApp.Turns(conv?["messages"]);
         for (var i = 0; i < stored.Count; i++)
@@ -238,18 +238,28 @@ internal sealed class EchoBoard : IDisposable
 
         return rows;
 
-        Dictionary<string, string> Row(string id, string role, string content, IEnumerable<JsonObject>? glosses)
+        JsonObject Row(string id, string role, string content, IEnumerable<JsonObject>? glosses)
         {
             var user = role == "user";
-            var line = user ? "" : GlossLine(glosses, app.Dictionary.LearnedLemmas());
-            return new Dictionary<string, string>
+            var row = new JsonObject
             {
                 ["id"] = id,
                 ["who"] = user ? "我" : "Echo",
                 ["time"] = "",
-                ["text"] = line.Length > 0 ? content + "\n\n" + line : content,
+                ["text"] = content,
                 ["direction"] = user ? "out" : "in",
             };
+            if (!user && glosses is not null)
+            {
+                var learned = app.Dictionary.LearnedLemmas();
+                row["words"] = new JsonArray(glosses
+                    .Where(g => g["word"]?.GetValue<string>() is { Length: > 0 })
+                    .Where(g => g["state"]?.GetValue<string>() != "missing")
+                    .Where(g => g["state"]?.GetValue<string>() != "skipped_learned" || g["gloss"]?.GetValue<string>()?.Length == 0)
+                    .Where(g => !learned.Contains(g["lemma"]?.GetValue<string>() ?? ""))
+                    .Select(g => (JsonNode)g.DeepClone()).ToArray());
+            }
+            return row;
         }
     }
 
