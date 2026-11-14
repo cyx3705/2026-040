@@ -133,7 +133,7 @@ async function aiTurn() {
     const resp = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history, level, length: replyLength, conversation_id: convId, practice: plan }),
+      body: JSON.stringify({ messages: history, level, length: replyLength + 1, conversation_id: convId, practice: plan }),
     });
     const reader = resp.body.getReader();
     let saved = null;
@@ -297,7 +297,7 @@ async function fetchSuggest() {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history, text, level, length: replyLength, practice: plan, candidates: debugSettings.candidates }),
+      body: JSON.stringify({ messages: history, text, level, length: replyLength + 1, practice: plan, candidates: debugSettings.candidates }),
     });
     const items = await resp.json();
     if (!resp.ok) throw new Error(typeof items.detail === "string" ? items.detail : "预测失败，请重试");

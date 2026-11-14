@@ -26,19 +26,30 @@ internal static class EchoPage
 
     public const string ConversationChannel = EchoIdentity.Domain + ".conversation";
     public const string SearchChannel = EchoIdentity.Domain + ".search";
+    public const string ComposerChannel = EchoIdentity.Domain + ".composer";
 
     public const string TextBoxId = "text";
+    public const string StandardBoxId = "standard";
     public const string LevelBoxId = "level";
+    public const string LengthBoxId = "length";
 
     public const string ViewConversation = "conversation";
     public const string ViewMessage = "message";
+    public const string ViewSuggest = "suggest";
     public const string ViewLevel = "level";
+    public const string ViewStandard = "standard";
+    public const string ViewLength = "length";
 
     public const string NewActionId = EchoIdentity.Domain + ".conv.new";
     public const string DeleteActionId = EchoIdentity.Domain + ".conv.delete";
     public const string SendActionId = EchoIdentity.Domain + ".chat.send";
     public const string StopActionId = EchoIdentity.Domain + ".chat.stop";
     public const string LevelActionId = EchoIdentity.Domain + ".chat.level";
+    public const string StandardActionId = EchoIdentity.Domain + ".chat.standard";
+    public const string LengthActionId = EchoIdentity.Domain + ".chat.length";
+    public const string SuggestActionId = EchoIdentity.Domain + ".chat.suggest";
+    public const string TranslateActionId = EchoIdentity.Domain + ".chat.translate";
+    public const string AcceptSuggestionActionId = EchoIdentity.Domain + ".chat.accept";
 
     public const string DataCommand = EchoIdentity.Domain + ".ui.data";
 
@@ -135,7 +146,7 @@ internal static class EchoPage
                                 {
                                     widgets = new object[]
                                     {
-                                        new { kind = "textbox", id = TextBoxId, label = "", multiline = true, flex = true },
+                                        new { kind = "textbox", id = TextBoxId, label = "", multiline = true, flex = true, channel = ComposerChannel },
                                     },
                                 },
                                 new
@@ -144,11 +155,35 @@ internal static class EchoPage
                                     {
                                         new
                                         {
-                                            kind = "textbox", id = LevelBoxId, label = "难度", mode = "select", value = level, minWidth = 96,
+                                            kind = "choices", id = "suggestions", label = "", flex = true,
+                                            optionsSource = new { command = DataCommand, args = new Dictionary<string, string> { ["view"] = ViewSuggest, ["conversation"] = Selected("id"), ["text"] = "{selection." + ComposerChannel + ".value}" } },
+                                            commitAction = AcceptSuggestionActionId,
+                                        },
+                                    },
+                                },
+                                new
+                                {
+                                    widgets = new object[]
+                                    {
+                                        new
+                                        {
+                                            kind = "textbox", id = StandardBoxId, label = "分级类型", mode = "select", value = "欧洲语言框架", minWidth = 128,
+                                            commitAction = StandardActionId,
+                                            optionsSource = new { command = DataCommand, args = new { view = ViewStandard } },
+                                        },
+                                        new
+                                        {
+                                            kind = "textbox", id = LevelBoxId, label = "等级", mode = "select", value = level, minWidth = 96,
                                             commitAction = LevelActionId,
                                             optionsSource = new { command = DataCommand, args = new { view = ViewLevel } },
                                         },
-                                        new { kind = "text", text = "Enter 换行 · AI 回复带逐词释义", flex = true },
+                                        new
+                                        {
+                                            kind = "textbox", id = LengthBoxId, label = "回复长度", mode = "select", value = "人类", minWidth = 104,
+                                            commitAction = LengthActionId,
+                                            optionsSource = new { command = DataCommand, args = new { view = ViewLength } },
+                                        },
+                                        new { kind = "text", text = "Shift+空格或 Tab 选词 · Enter 发送 · Shift+Enter 换行", flex = true },
                                         new { kind = "button", action = StopActionId, text = "停止" },
                                         new { kind = "button", action = SendActionId, text = "发送", enabledWhen = new { selected = ConversationChannel } },
                                     },
@@ -196,6 +231,33 @@ internal static class EchoPage
                 id = LevelActionId, title = "难度", command = LevelActionId,
                 args = new Dictionary<string, string> { ["level"] = "{value}" },
                 summary = "AI 说话的难度，下一句起生效",
+            },
+            new
+            {
+                id = StandardActionId, title = "分级类型", command = EchoIdentity.Domain + ".chat.level",
+                args = new Dictionary<string, string> { ["standard"] = "{value}" },
+                summary = "选择 CEFR、国内考试或雅思口语分级",
+            },
+            new
+            {
+                id = LengthActionId, title = "回复长度", command = EchoIdentity.Domain + ".chat.level",
+                args = new Dictionary<string, string> { ["length"] = "{value}" },
+                summary = "选择一句话、人类、长篇或故事等回复长度",
+            },
+            new
+            {
+                id = TranslateActionId, title = "翻译并回填", command = TranslateActionId,
+                args = new Dictionary<string, string> { ["chinese"] = "{chinese}" }, summary = "按当前对话上下文从字典候选中选择英文并回填输入框",
+            },
+            new
+            {
+                id = SuggestActionId, title = "输入选词", command = SuggestActionId,
+                args = new Dictionary<string, string> { ["text"] = "{" + TextBoxId + "}" }, summary = "按光标前后文显示最多 20 个英文候选及释义",
+            },
+            new
+            {
+                id = AcceptSuggestionActionId, title = "选词", command = AcceptSuggestionActionId,
+                args = new Dictionary<string, string> { ["value"] = "{value}", ["text"] = "{" + TextBoxId + "}" }, summary = "把候选词插入发送框并保留末尾空格",
             },
         },
     }, Options);

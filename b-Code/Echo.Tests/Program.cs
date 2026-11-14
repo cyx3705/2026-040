@@ -83,8 +83,8 @@ static void TestCommandRegistration()
     var bus = new FakeBus(_ => CommandResult.Ok());
     var service = new EchoService(bus, _ => { });
     EchoModule.Register(registry, service, new EchoBoard(service.AppAsync, bus, _ => { }));
-    string[] expected = ["app.status", "app.start", "app.stop", "app.open", "dict.setup", "input.build", "word.list", "word.learn",
-        "ui.describe", "ui.actions", "ui.data", "conv.list", "conv.show", "conv.new", "conv.delete", "chat.send", "chat.stop", "chat.level"];
+    string[] expected = ["app.status", "app.start", "app.stop", "dict.setup", "input.build", "word.list", "word.learn",
+        "ui.describe", "ui.actions", "ui.data", "conv.list", "conv.show", "conv.new", "conv.delete", "chat.send", "chat.stop", "chat.level", "chat.suggest", "chat.translate", "chat.accept"];
     foreach (var name in expected)
     {
         True(registry.TryGet("echo." + name, out var d), $"未注册 echo.{name}");
@@ -288,12 +288,12 @@ static void TestStoreThroughDiana()
 static void TestLevels()
 {
     Equal("The learner's English is at the level of China's College English Test Band 4 (CET-4) (roughly CEFR B1). Match that level: "
-          + "Use common everyday English with a few phrasal verbs, in clear sentences. Reply in three or four sentences, and end with a follow-up question.",
+          + "Use common everyday English with a few phrasal verbs, in clear sentences. Reply like a real human conversation partner: be natural and concise, then ask a question.",
         Levels.Describe("cet:4"));
     Equal("cefr:A1", Levels.Normalize("starter"));
     Equal(Levels.Default, Levels.Normalize("nope"));
     Equal(3, Levels.Catalog().Count);
-    Equal(6, Levels.LengthCatalog().Count);
+    Equal(4, Levels.LengthCatalog().Count);
 }
 
 static void TestPractice()
@@ -760,7 +760,7 @@ static async Task TestHostLoadsPackage()
         using var probe = JsonDocument.Parse(output);
         var module = probe.RootElement.GetProperty("data").GetProperty("module");
         True(module.GetProperty("attached").GetBoolean(), "宿主没有接上模块：" + output);
-        Equal(18, module.GetProperty("commandCount").GetInt32());
+        Equal(20, module.GetProperty("commandCount").GetInt32());
         True(probe.RootElement.GetProperty("data").GetProperty("result").GetProperty("success").GetBoolean(), output);
     }
     finally

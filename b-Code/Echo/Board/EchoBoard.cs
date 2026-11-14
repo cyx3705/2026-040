@@ -17,12 +17,15 @@ internal sealed class EchoBoard : IDisposable
     internal static TimeSpan Beat { get; set; } = TimeSpan.FromMilliseconds(350);
 
     private const string LevelSetting = "aurora_level";
+    private const string LengthSetting = "aurora_length";
+    private const string StandardSetting = "aurora_standard";
 
     private readonly Func<CancellationToken, Task<EchoApp>> _app;
     private readonly ICommandBus _bus;
     private readonly Action<string> _log;
     private readonly object _gate = new();
     private Draft? _draft;
+    private long _currentConversation;
 
     public EchoBoard(Func<CancellationToken, Task<EchoApp>> app, ICommandBus bus, Action<string> log)
     {
@@ -68,6 +71,101 @@ internal sealed class EchoBoard : IDisposable
         return hit.Label;
     }
 
+    public async Task<int> LengthAsync(CancellationToken cancellation)
+    {
+        var app = await _app(cancellation).ConfigureAwait(false);
+        return int.TryParse(app.Store.Setting(LengthSetting, "2"), out var value) && value is >= 1 and <= 4 ? value : 2;
+    }
+
+    public async Task<string?> SetLengthAsync(string value, CancellationToken cancellation)
+    {
+        value = value.Trim();
+        var hit = Levels.Lengths.Select((x, i) => (Name: x.Name, Number: i))
+            .FirstOrDefault(x => x.Name.Equals(value, StringComparison.OrdinalIgnoreCase)
+                || x.Number.ToString(CultureInfo.InvariantCulture) == value);
+        if (hit.Name is null)
+            return null;
+        var app = await _app(cancellation).ConfigureAwait(false);
+        app.Store.SetSetting(LengthSetting, (hit.Number + 1).ToString(CultureInfo.InvariantCulture));
+        return hit.Name;
+    }
+
+    public static IReadOnlyList<IReadOnlyDictionary<string, string>> StandardRows()
+        => new[]
+        {
+            new Dictionary<string, string> { ["value"] = "欧洲语言框架" },
+            new Dictionary<string, string> { ["value"] = "国内考试" },
+            new Dictionary<string, string> { ["value"] = "雅思口语" },
+        };
+
+    public async Task<string?> SetStandardAsync(string value, CancellationToken cancellation)
+    {
+        value = value.Trim();
+        var hit = StandardRows().FirstOrDefault(x => x["value"].Equals(value, StringComparison.OrdinalIgnoreCase));
+        if (hit is null)
+            return null;
+        var app = await _app(cancellation).ConfigureAwait(false);
+        app.Store.SetSetting(StandardSetting, value);
+        return value;
+    }
+
+    public static IReadOnlyList<IReadOnlyDictionary<string, string>> LengthRows()
+        => Levels.Lengths.Select(x => (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["value"] = x.Name }).ToList();
+
+    public async Task<JsonArray> SuggestAsync(long conversation, string text, CancellationToken cancellation)
+    {
+        var app = await _app(cancellation).ConfigureAwait(false);
+        var conv = app.Store.Get(conversation) ?? throw new InvalidOperationException("没有这段对话");
+        var body = new JsonObject { ["messages"] = new JsonArray(EchoApp.Turns(conv["messages"]).Select(m => (JsonNode)m.ToJson()).ToArray()), ["text"] = text, ["candidates"] = 20 };
+        return await app.SuggestForAuroraAsync(body, cancellation).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<IReadOnlyDictionary<string, string>>> SuggestRowsAsync(long conversation, string text, CancellationToken cancellation)
+    {
+        var rows = new List<IReadOnlyDictionary<string, string>>();
+        foreach (var item in await SuggestAsync(conversation, text, cancellation).ConfigureAwait(false))
+        {
+            var word = item?["word"]?.GetValue<string>() ?? "";
+            if (word.Length == 0) continue;
+            var gloss = item?["gloss"]?.GetValue<string>() ?? "";
+            rows.Add(new Dictionary<string, string>
+            {
+                ["value"] = word,
+                ["text"] = gloss.Length == 0 ? word : word + " · " + gloss,
+            });
+        }
+        return rows;
+    }
+
+    public async Task<string> AcceptSuggestionAsync(string text, string word, CancellationToken cancellation)
+    {
+        text ??= "";
+        word = word.Trim();
+        if (word.Length == 0) return text;
+        var partial = System.Text.RegularExpressions.Regex.Match(text, "[A-Za-z']+$").Value;
+        var prefix = partial.Length == 0 ? text : text[..^partial.Length];
+        var value = prefix + word + " ";
+        await _bus.InvokeAsync("aurora.ui.panelset panel=" + EchoPage.SendPanelId + " control=" + EchoPage.TextBoxId + " value=" + CommandParser.QuoteArg(value), "Echo", cancellation).ConfigureAwait(false);
+        return value;
+    }
+
+    public async Task<JsonObject> TranslateAsync(long conversation, string chinese, CancellationToken cancellation)
+    {
+        var app = await _app(cancellation).ConfigureAwait(false);
+        var conv = app.Store.Get(conversation) ?? throw new InvalidOperationException("没有这段对话");
+        var body = new JsonObject { ["messages"] = new JsonArray(EchoApp.Turns(conv["messages"]).Select(m => (JsonNode)m.ToJson()).ToArray()), ["chinese"] = chinese };
+        return await app.TranslateForAuroraAsync(body, cancellation).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<IReadOnlyDictionary<string, string>>> DictionaryRowsAsync(CancellationToken cancellation)
+    {
+        var app = await _app(cancellation).ConfigureAwait(false);
+        return app.Dictionary.Learned().Select(w => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>
+        {
+            ["lemma"] = w.Lemma, ["gloss"] = w.Gloss,
+        }).ToList();
+    }
+
     public static IReadOnlyList<IReadOnlyDictionary<string, string>> LevelRows()
         => Levels.Choices().Select(c => (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["value"] = c.Label }).ToList();
 
@@ -110,6 +208,7 @@ internal sealed class EchoBoard : IDisposable
 
     public async Task<IReadOnlyList<IReadOnlyDictionary<string, string>>> MessageRowsAsync(long conversation, CancellationToken cancellation)
     {
+        _currentConversation = conversation;
         var app = await _app(cancellation).ConfigureAwait(false);
         var rows = new List<IReadOnlyDictionary<string, string>>();
         var conv = app.Store.Get(conversation);
@@ -153,6 +252,8 @@ internal sealed class EchoBoard : IDisposable
             };
         }
     }
+
+    public long CurrentConversation => _currentConversation;
 
     /// <summary>气泡底下的释义行：按出现顺序、同一个词只列一次，学会的和查不到的不列。</summary>
     internal static string GlossLine(IEnumerable<JsonObject>? glosses, IReadOnlySet<string> learned)
@@ -237,7 +338,7 @@ internal sealed class EchoBoard : IDisposable
         messages.Add(new JsonObject { ["role"] = "user", ["content"] = text });
         var body = new JsonObject
         {
-            ["messages"] = messages, ["level"] = level, ["length"] = 0, ["conversation_id"] = conversation,
+            ["messages"] = messages, ["level"] = level, ["length"] = await LengthAsync(cancellation).ConfigureAwait(false), ["conversation_id"] = conversation,
             ["practice"] = conv["practice"]?.DeepClone(),
         };
         var fresh = messages.Count == 1 && conv["titled"]?.GetValue<bool>() != true && conv["practice"] is null;

@@ -61,7 +61,7 @@
     "build": "dotnet build .\\b-Code\\Echo\\Echo.csproj -c Release -p:NuGetAudit=false",
     "test": "dotnet run --project .\\b-Code\\Echo.Tests\\Echo.Tests.csproj -c Release -p:NuGetAudit=false",
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Test-ProjectContract.ps1 -Instantiation",
-    "run": "宿主在跑即在 http://127.0.0.1:8040；控制台 echo.app.open 打开页面",
+    "run": "宿主在跑即由 Aurora 托管 Echo 页面；8040 仅供浏览器扩展后台接口",
     "package": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\b-Code\\Echo\\eng\\Build-EchoPackage.ps1",
     "testSuggestUI": "node b-Code/Echo.Tests/ui/suggest_queue.cjs",
     "testInputUI": "node b-Code/Echo.Tests/ui/composer_input.cjs",

@@ -34,6 +34,9 @@ internal sealed partial class EchoApp
     }
 
     /// <summary>PRED：一次前向筛出指定数量的候选，各带短释义。45 秒等不到算超时。</summary>
+    internal Task<JsonArray> SuggestForAuroraAsync(JsonObject body, CancellationToken cancellation)
+        => SuggestAsync(body, cancellation);
+
     private async Task<JsonArray> SuggestAsync(JsonObject body, CancellationToken cancellation)
     {
         var candidates = Int(body, "candidates", 5);
@@ -82,6 +85,9 @@ internal sealed partial class EchoApp
     [GeneratedRegex(@"^[㐀-鿿\uD840-𿰀-\uDFFF]+$")] private static partial Regex ChineseRx();
 
     /// <summary>INPUT-007：一次带约束的标签决策选出英文，不做自回归翻译。</summary>
+    internal Task<JsonObject> TranslateForAuroraAsync(JsonObject body, CancellationToken cancellation)
+        => TranslateInputAsync(body, cancellation);
+
     private async Task<JsonObject> TranslateInputAsync(JsonObject body, CancellationToken cancellation)
     {
         var chinese = (body["chinese"]?.GetValue<string>() ?? "").Trim();

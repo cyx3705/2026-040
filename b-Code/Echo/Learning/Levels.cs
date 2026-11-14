@@ -22,33 +22,29 @@ internal static class Levels
                   + "cultural references and wordplay, with no simplification at all.",
     };
 
-    /// <summary>回答长度（页面滑块）。0 是「自动」，按难度档位取默认长度。</summary>
+    /// <summary>回答长度。0 是「自动」，手动档位按用户熟悉的四种说法选择。</summary>
     public static readonly (string Name, string Note)[] Lengths =
     [
-        ("自动", "跟着难度走：入门一两句，高级一小段"),
-        ("一句", "只说一句，而且是个问题"),
-        ("简短", "一两句，问一个问题"),
-        ("适中", "三四句，再接着问"),
-        ("详细", "一整段：说想法、举例子"),
-        ("长篇", "两三段：展开讲、给细节和观点"),
+        ("一句话", "只说一句，而且是个问题"),
+        ("人类", "像真实的人自然聊天，简洁回应并追问"),
+        ("长篇", "一整段：说想法、举例子和细节"),
+        ("故事", "两三段讲完整故事，再接着问"),
     ];
 
     private static readonly Dictionary<int, string> LengthRules = new()
     {
         [1] = "Your whole reply must be a single question sentence that keeps the conversation going. "
               + "Do not start with a reaction such as \"That sounds fun!\" or any other sentence.",
-        [2] = "Reply in at most two short sentences in total, counting any short reaction such as \"Nice!\", "
-              + "and end with a question.",
-        [3] = "Reply in three or four sentences, and end with a follow-up question.",
-        [4] = "Reply in one full paragraph of five to seven sentences: share your own thoughts, an example "
-              + "or a short story, then ask a follow-up question.",
-        [5] = "Reply at length, in two or three paragraphs: explain, give examples and details, share your "
-              + "opinions, then ask a follow-up question.",
+        [2] = "Reply like a real human conversation partner: be natural and concise, then ask a question.",
+        [3] = "Reply in one full paragraph of five to seven sentences: share your own thoughts, examples "
+              + "and details, then ask a follow-up question.",
+        [4] = "Reply in two or three paragraphs as a complete story: explain, give examples and details, "
+              + "then ask a follow-up question.",
     };
 
     private static readonly Dictionary<string, int> AutoLength = new()
     {
-        ["A1"] = 2, ["A2"] = 2, ["B1"] = 3, ["B2"] = 3, ["C1"] = 4, ["C2"] = 4, ["C2+"] = 4,
+        ["A1"] = 2, ["A2"] = 2, ["B1"] = 2, ["B2"] = 3, ["C1"] = 3, ["C2"] = 3, ["C2+"] = 3,
     };
 
     private const string Exams = "China's College English Test";

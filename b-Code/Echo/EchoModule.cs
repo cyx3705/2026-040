@@ -147,28 +147,6 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
 
         registry.Register(new CommandDescriptor
         {
-            Name = domain + ".app.open",
-            Domain = domain,
-            CommandClass = "app",
-            Summary = "用默认浏览器打开 Echo 页面；网页服务没在跑时先启动。",
-            Example = domain + ".app.open",
-            Handler = async context =>
-            {
-                try
-                {
-                    var host = service.Host ?? await service.StartAsync(EchoService.EnvironmentPort(), false, context.Cancellation).ConfigureAwait(false);
-                    EchoService.OpenBrowser(host.Url);
-                    return CommandResult.Ok($"已打开 {host.Url}");
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return CommandResult.Fail(ex.Message);
-                }
-            },
-        });
-
-        registry.Register(new CommandDescriptor
-        {
             Name = domain + ".dict.setup",
             Domain = domain,
             CommandClass = "dict",
@@ -296,6 +274,14 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                 {
                     case EchoPage.ViewLevel:
                         return CommandResult.Ok("难度", EchoBoard.LevelRows());
+                    case EchoPage.ViewStandard:
+                        return CommandResult.Ok("分级类型", EchoBoard.StandardRows());
+                    case EchoPage.ViewLength:
+                        return CommandResult.Ok("回复长度", EchoBoard.LengthRows());
+                    case EchoPage.ViewSuggest:
+                        if (!TryId(context.GetString("conversation"), out var suggestId))
+                            return CommandResult.Ok("候选", Array.Empty<IReadOnlyDictionary<string, string>>());
+                        return CommandResult.Ok("候选", await board.SuggestRowsAsync(suggestId, context.GetString("text") ?? "", context.Cancellation).ConfigureAwait(false));
                     case EchoPage.ViewConversation:
                         return CommandResult.Ok("对话", await board.ConversationRowsAsync(context.GetString("q"), context.Cancellation).ConfigureAwait(false));
                     case EchoPage.ViewMessage:
@@ -304,17 +290,18 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                             return CommandResult.Ok("消息", Array.Empty<IReadOnlyDictionary<string, string>>());
                         return CommandResult.Ok("消息", await board.MessageRowsAsync(id, context.Cancellation).ConfigureAwait(false));
                     default:
-                        return CommandResult.Fail($"未知 view；支持 {EchoPage.ViewConversation} / {EchoPage.ViewMessage} / {EchoPage.ViewLevel}");
+                        return CommandResult.Fail($"未知 view；支持 {EchoPage.ViewConversation} / {EchoPage.ViewMessage} / {EchoPage.ViewLevel} / {EchoPage.ViewStandard} / {EchoPage.ViewLength} / {EchoPage.ViewSuggest}");
                 }
             }),
             [
                 new ParameterSpec
                 {
                     Name = "view", Description = "取哪组行：conversation 会话卡片、message 气泡消息、level 难度候选。", Position = 0,
-                    AllowedValues = [EchoPage.ViewConversation, EchoPage.ViewMessage, EchoPage.ViewLevel],
+                    AllowedValues = [EchoPage.ViewConversation, EchoPage.ViewMessage, EchoPage.ViewLevel, EchoPage.ViewStandard, EchoPage.ViewLength, EchoPage.ViewSuggest],
                 },
                 new ParameterSpec { Name = "q", Description = "会话搜索词，在标题和全部消息里找；空串或省略列出全部。" },
                 new ParameterSpec { Name = "conversation", Description = "消息视图的对话编号；没选中时给空表。" },
+                new ParameterSpec { Name = "text", Description = "发送框当前文字，候选视图使用。" },
             ]));
 
         registry.Register(new CommandDescriptor
@@ -424,11 +411,30 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Name = domain + ".chat.level",
             Domain = domain,
             CommandClass = "chat",
-            Summary = "查看或设置 AI 英语回复难度",
-            Example = domain + ".chat.level level=B1",
-            Parameters = [new ParameterSpec { Name = "level", Description = "难度显示名，例如 A2、CET-4、雅思 6.5；省略时只返回当前难度。", Position = 0 }],
+            Summary = "查看或设置分级类型、英语等级和回复长度",
+            Example = domain + ".chat.level level=B1 length=长篇",
+            Parameters =
+            [
+                new ParameterSpec { Name = "level", Description = "等级显示名，例如 A2、CET-4、雅思 6.5。", Position = 0 },
+                new ParameterSpec { Name = "standard", Description = "分级类型：欧洲语言框架、国内考试、雅思口语。" },
+                new ParameterSpec { Name = "length", Description = "回复长度：一句话、人类、长篇、故事。" },
+            ],
             Handler = context => Guard(async () =>
             {
+                var standard = context.GetString("standard");
+                if (!string.IsNullOrWhiteSpace(standard))
+                {
+                    var selected = await board.SetStandardAsync(standard, context.Cancellation).ConfigureAwait(false);
+                    if (selected is null)
+                        return CommandResult.Fail("认不出这个分级类型");
+                    return CommandResult.Ok("分级类型改为 " + selected);
+                }
+                var length = context.GetString("length");
+                if (!string.IsNullOrWhiteSpace(length))
+                {
+                    var selected = await board.SetLengthAsync(length, context.Cancellation).ConfigureAwait(false);
+                    return selected is null ? CommandResult.Fail("认不出这个回复长度") : CommandResult.Ok("回复长度改为 " + selected);
+                }
                 var value = context.GetString("level");
                 if (string.IsNullOrWhiteSpace(value))
                     return CommandResult.Ok("当前难度 " + EchoBoard.LevelLabel(await board.LevelAsync(context.Cancellation).ConfigureAwait(false)));
@@ -436,6 +442,51 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                 return label is null
                     ? CommandResult.Fail("认不出这个难度；可选：" + string.Join("、", Levels.Choices().Select(c => c.Label)))
                     : CommandResult.Ok("难度改为 " + label);
+            }),
+        });
+
+        registry.Register(new CommandDescriptor
+        {
+            Name = domain + ".chat.suggest", Domain = domain, CommandClass = "chat",
+            Summary = "按当前 Aurora 对话和输入上下文生成英文候选及字典释义",
+            Example = domain + ".chat.suggest conversation=12 text=I+went",
+            Parameters = [new ParameterSpec { Name = "conversation", Description = "可省略，默认当前打开的对话" }, new ParameterSpec { Name = "text", Description = "发送框当前文字", Required = true }],
+            Handler = context => Guard(async () =>
+            {
+                var id = board.CurrentConversation;
+                if (TryId(context.GetString("conversation"), out var explicitId)) id = explicitId;
+                if (id <= 0) return CommandResult.Fail("请先打开一段对话");
+                var rows = await board.SuggestAsync(id, context.RequireString("text"), context.Cancellation).ConfigureAwait(false);
+                return CommandResult.Ok("输入候选", rows);
+            }),
+        });
+
+        registry.Register(new CommandDescriptor
+        {
+            Name = domain + ".chat.translate", Domain = domain, CommandClass = "chat",
+            Summary = "按当前 Aurora 对话上下文把中文整词翻译成英文",
+            Example = domain + ".chat.translate conversation=12 chinese=苹果",
+            Parameters = [new ParameterSpec { Name = "conversation", Description = "可省略，默认当前打开的对话" }, new ParameterSpec { Name = "chinese", Description = "完整中文词组", Required = true }],
+            Handler = context => Guard(async () =>
+            {
+                var id = board.CurrentConversation;
+                if (TryId(context.GetString("conversation"), out var explicitId)) id = explicitId;
+                if (id <= 0) return CommandResult.Fail("请先打开一段对话");
+                var result = await board.TranslateAsync(id, context.RequireString("chinese"), context.Cancellation).ConfigureAwait(false);
+                return CommandResult.Ok(result["word"]?.GetValue<string>() is { Length: > 0 } word ? "英文回填：" + word : "没有找到合适英文", result);
+            }),
+        });
+
+        registry.Register(new CommandDescriptor
+        {
+            Name = domain + ".chat.accept", Domain = domain, CommandClass = "chat",
+            Summary = "把 Aurora 候选词回写到发送框",
+            Example = domain + ".chat.accept value=hello text=I+",
+            Parameters = [new ParameterSpec { Name = "value", Description = "候选词", Required = true }, new ParameterSpec { Name = "text", Description = "发送框当前文字", Required = true }],
+            Handler = context => Guard(async () =>
+            {
+                var value = await board.AcceptSuggestionAsync(context.RequireString("text"), context.RequireString("value"), context.Cancellation).ConfigureAwait(false);
+                return CommandResult.Ok("已选词", Ok(new { text = value }));
             }),
         });
     }

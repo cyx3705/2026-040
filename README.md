@@ -17,7 +17,7 @@ Echo（2026-040）是 HistoryVulcan 的宿主模块（域 `echo`）。界面在 
 
 - 前提：HistoryVulcan 宿主 6.0+、Ratio 0.8.0+（`dependsOn`）、本机推理服务（`ratio.local.start`）。
 - 首次准备离线词典：控制台执行 `echo.dict.setup`（ECDICT，分段续传）。中文输入桥需 VS C++ Build Tools x64 + Windows SDK，首次使用时自动编译，也可先执行 `echo.input.build`。
-- 打开页面：进 Aurora 的 HistoryEcho 场景；旧网页用 `echo.app.open` 或浏览器访问 `http://127.0.0.1:8040`。`echo.app.status` 看网页服务、数据位置与推理状态；`echo.app.stop` / `echo.app.start` 手动停起。
+- 打开页面：进入 Aurora 的 HistoryEcho 场景。8040 仅由浏览器扩展使用，Echo 不再提供独立网页入口。`echo.app.status` 看扩展服务、数据位置与推理状态；`echo.app.stop` / `echo.app.start` 手动停起。
 - 数据：学习数据（学会的词、对话、单词表、设置）在仓内 `z-学习数据/user.db`（`ECHO_USER_DB` 可改）；可重建数据（词典、输入桥构建、伴读上下文）在 `ECHO_DATA_DIR`，缺省 `%USERPROFILE%\.echo`。端口 `ECHO_WEB_PORT`，`ECHO_AUTOSTART=0` 时宿主启动不自动起网页服务。
 
 ## 浏览器扩展与多设备
