@@ -385,7 +385,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             Example = domain + ".chat.send conversation=12 text=\"I went to the bank yesterday.\" wait=true",
             Parameters =
             [
-                new ParameterSpec { Name = "conversation", Description = "对话编号，取 echo.conv.list 的 id，或 echo.conv.new 新建。", Type = ParamType.Int, Required = true },
+                new ParameterSpec { Name = "conversation", Description = "可省略；省略时使用当前会话或自动新建。", Type = ParamType.Int },
                 new ParameterSpec { Name = "text", Description = "你说的话（英语，夹中文也行）。", Required = true },
                 new ParameterSpec { Name = "wait", Description = "true 时等 AI 说完，把回复与释义一起返回；false 发出即返回。", Type = ParamType.Bool, Default = "false" },
             ],
