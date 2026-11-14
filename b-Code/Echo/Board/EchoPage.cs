@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Echo.Learning;
 
 namespace Echo.Board;
 
@@ -30,6 +31,7 @@ internal static class EchoPage
     public const string ConversationChannel = EchoIdentity.Domain + ".conversation";
     public const string SearchChannel = EchoIdentity.Domain + ".search";
     public const string ComposerChannel = EchoIdentity.Domain + ".composer";
+    public const string StandardChannel = EchoIdentity.Domain + ".standard";
 
     public const string TextBoxId = "text";
     public const string StandardBoxId = "standard";
@@ -69,7 +71,7 @@ internal static class EchoPage
     private static string Selected(string column) => "{selection." + ConversationChannel + "." + column + "}";
 
     /// <summary>页面描述；<paramref name="level"/> 是难度选项框的初值（显示名）。</summary>
-    public static string Describe(string level, int candidateCount = 5, int learnedCount = 0) => JsonSerializer.Serialize(new
+    public static string Describe(string level, int candidateCount = 5, int learnedCount = 0, int length = 2) => JsonSerializer.Serialize(new
     {
         schemaVersion = 1,
         owner = EchoIdentity.PageOwner,
@@ -182,7 +184,8 @@ internal static class EchoPage
                                     {
                                         new
                                         {
-                                            kind = "textbox", id = StandardBoxId, label = "分级类型", mode = "select", value = "欧洲语言框架", minWidth = 128,
+                                            kind = "textbox", id = StandardBoxId, label = "分级类型", mode = "select", value = Levels.StandardOf(Levels.Resolve(level)), minWidth = 128,
+                                            channel = StandardChannel,
                                             commitAction = StandardActionId,
                                             optionsSource = new { command = DataCommand, args = new { view = ViewStandard } },
                                         },
@@ -190,11 +193,11 @@ internal static class EchoPage
                                         {
                                             kind = "textbox", id = LevelBoxId, label = "等级", mode = "select", value = level, minWidth = 96,
                                             commitAction = LevelActionId,
-                                            optionsSource = new { command = DataCommand, args = new { view = ViewLevel } },
+                                            optionsSource = new { command = DataCommand, args = new Dictionary<string, string> { ["view"] = ViewLevel, ["standard"] = "{selection." + StandardChannel + ".value}" } },
                                         },
                                         new
                                         {
-                                            kind = "textbox", id = LengthBoxId, label = "回复长度", mode = "select", value = "人类", minWidth = 104,
+                                            kind = "textbox", id = LengthBoxId, label = "回复长度", mode = "select", value = Levels.Lengths[Math.Clamp(length, 1, 4) - 1].Name, minWidth = 104,
                                             commitAction = LengthActionId,
                                             optionsSource = new { command = DataCommand, args = new { view = ViewLength } },
                                         },
@@ -314,7 +317,7 @@ internal static class EchoPage
             new
             {
                 id = CandidateCountActionId, title = "选词数量", command = CandidateCountActionId,
-                args = new Dictionary<string, string> { ["count"] = "{value}" }, summary = "设置输入候选显示数量（1 到 20 个）",
+                args = new Dictionary<string, string> { ["count"] = "{value}" }, summary = "设置输入候选显示数量（5、10、15、20 个）",
             },
             new
             {

@@ -98,8 +98,18 @@ internal static class Levels
     }
 
     /// <summary>扁平的难度候选（Aurora 选项框用）：id 与显示名，雅思带「雅思」前缀。</summary>
-    public static IEnumerable<(string Id, string Label)> Choices()
-        => Standards.SelectMany(s => s.Items.Select(l => (l.Id, s.Id == "ielts" ? "雅思 " + l.Name : l.Name)));
+    public static IEnumerable<(string Id, string Label)> Choices(string? standard = null)
+        => Standards.Where(s => standard is null || s.Id == standard || s.Name == standard)
+            .SelectMany(s => s.Items.Select(l => (l.Id, s.Id == "ielts" ? "雅思 " + l.Name : l.Name)));
+
+    public static IEnumerable<(string Id, string Label)> StandardChoices()
+        => Standards.Select(s => (s.Id, s.Name));
+
+    public static string StandardOf(string level)
+        => Standards.First(s => s.Items.Any(l => l.Id == Normalize(level))).Name;
+
+    public static string Resolve(string value)
+        => Choices().FirstOrDefault(c => c.Id == value || c.Label == value).Id ?? Default;
 
     public static JsonArray Catalog() => new(Standards.Select(s => (JsonNode)new JsonObject
     {

@@ -268,7 +268,8 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             async context => Page(EchoPage.Describe(
                 EchoBoard.LevelLabel(await board.LevelAsync(context.Cancellation).ConfigureAwait(false)),
                 await board.CandidateCountAsync(context.Cancellation).ConfigureAwait(false),
-                await board.LearnedCountAsync(context.Cancellation).ConfigureAwait(false)))));
+                await board.LearnedCountAsync(context.Cancellation).ConfigureAwait(false),
+                await board.LengthAsync(context.Cancellation).ConfigureAwait(false)))));
         registry.Register(Internal("actions", "返回两页的动作声明", _ => Task.FromResult(Page(EchoPage.Actions()))));
         registry.Register(new CommandDescriptor
         {
@@ -304,7 +305,8 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                 switch (context.GetString("view")?.Trim().ToLowerInvariant())
                 {
                     case EchoPage.ViewLevel:
-                        return CommandResult.Ok("难度", EchoBoard.LevelRows());
+                        return CommandResult.Ok("难度", EchoBoard.LevelRows(context.GetString("standard")
+                            ?? await board.StandardAsync(context.Cancellation).ConfigureAwait(false)));
                     case EchoPage.ViewStandard:
                         return CommandResult.Ok("分级类型", EchoBoard.StandardRows());
                     case EchoPage.ViewLength:
@@ -343,6 +345,7 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
                 new ParameterSpec { Name = "q", Description = "会话搜索词，在标题和全部消息里找；空串或省略列出全部。" },
                 new ParameterSpec { Name = "conversation", Description = "消息视图的对话编号；没选中时给空表。" },
                 new ParameterSpec { Name = "text", Description = "发送框当前文字，候选视图使用。" },
+                new ParameterSpec { Name = "standard", Description = "等级候选所属分级类型；省略时按当前设置筛选。", AllowedValues = ["欧洲语言框架", "国内考试", "雅思口语"] },
             ]));
 
         registry.Register(new CommandDescriptor
@@ -465,27 +468,27 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             ],
             Handler = context => Guard(async () =>
             {
-                var standard = context.GetString("standard");
-                if (!string.IsNullOrWhiteSpace(standard))
-                {
-                    var selected = await board.SetStandardAsync(standard, context.Cancellation).ConfigureAwait(false);
-                    if (selected is null)
-                        return CommandResult.Fail("认不出这个分级类型");
-                    return CommandResult.Ok("分级类型改为 " + selected);
-                }
-                var length = context.GetString("length");
-                if (!string.IsNullOrWhiteSpace(length))
-                {
-                    var selected = await board.SetLengthAsync(length, context.Cancellation).ConfigureAwait(false);
-                    return selected is null ? CommandResult.Fail("认不出这个回复长度") : CommandResult.Ok("回复长度改为 " + selected);
-                }
-                var value = context.GetString("level");
-                if (string.IsNullOrWhiteSpace(value))
-                    return CommandResult.Ok("当前难度 " + EchoBoard.LevelLabel(await board.LevelAsync(context.Cancellation).ConfigureAwait(false)));
-                var label = await board.SetLevelAsync(value, context.Cancellation).ConfigureAwait(false);
-                return label is null
-                    ? CommandResult.Fail("认不出这个难度；可选：" + string.Join("、", Levels.Choices().Select(c => c.Label)))
-                    : CommandResult.Ok("难度改为 " + label);
+                var standard = context.GetString("standard")?.Trim();
+                var value = context.GetString("level")?.Trim();
+                var length = context.GetString("length")?.Trim();
+                var hasStandard = !string.IsNullOrEmpty(standard);
+                var hasLevel = !string.IsNullOrEmpty(value);
+                var hasLength = !string.IsNullOrEmpty(length);
+                if (hasStandard && !EchoBoard.StandardRows().Any(s => s["value"] == standard))
+                    return CommandResult.Fail("认不出这个分级类型");
+                if (hasLevel && !Levels.Choices(hasStandard ? standard : null).Any(l => l.Id == value || l.Label == value))
+                    return CommandResult.Fail("等级不属于所选分级类型或无法识别");
+                if (hasLength && !Levels.Lengths.Select((l, i) => (l.Name, Number: i.ToString())).Any(l => l.Name == length || l.Number == length))
+                    return CommandResult.Fail("认不出这个回复长度");
+                if (hasStandard) await board.SetStandardAsync(standard!, context.Cancellation).ConfigureAwait(false);
+                if (hasLevel) await board.SetLevelAsync(value!, context.Cancellation).ConfigureAwait(false);
+                if (hasLength) await board.SetLengthAsync(length!, context.Cancellation).ConfigureAwait(false);
+                if (hasStandard || hasLevel || hasLength) await board.SyncSettingsAsync(context.Cancellation).ConfigureAwait(false);
+                var currentLevel = await board.LevelAsync(context.Cancellation).ConfigureAwait(false);
+                var currentLength = await board.LengthAsync(context.Cancellation).ConfigureAwait(false);
+                return CommandResult.Ok("当前设置：" + Levels.StandardOf(currentLevel) + " / " + EchoBoard.LevelLabel(currentLevel)
+                    + " / " + Levels.Lengths[currentLength - 1].Name,
+                    new JsonObject { ["standard"] = Levels.StandardOf(currentLevel), ["level"] = currentLevel, ["length"] = currentLength });
             }),
         });
 
@@ -496,11 +499,11 @@ public sealed class EchoModule : IModuleContextAware, IDisposable
             CommandClass = "chat",
             Summary = "设置 Aurora 输入候选显示数量",
             Example = EchoPage.CandidateCountActionId + " count=5",
-            Parameters = [new ParameterSpec { Name = "count", Description = "输入候选数量，范围 1 到 20。", Required = true, Position = 0, Type = ParamType.Int }],
+            Parameters = [new ParameterSpec { Name = "count", Description = "输入候选数量：5、10、15、20。", Required = true, Position = 0, Type = ParamType.Int }],
             Handler = context => Guard(async () =>
             {
                 var count = await board.SetCandidateCountAsync(context.RequireString("count"), context.Cancellation).ConfigureAwait(false);
-                return count is null ? CommandResult.Fail("选词数量必须在 1 到 20 之间") : CommandResult.Ok("选词数量改为 " + count);
+                return count is null ? CommandResult.Fail("选词数量只能是 5、10、15、20") : CommandResult.Ok("选词数量改为 " + count);
             }),
         });
 

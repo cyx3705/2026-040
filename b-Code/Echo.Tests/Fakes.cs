@@ -19,6 +19,10 @@ internal sealed class FakeInference : IInference
 
     public List<string> Calls { get; } = [];
 
+    public List<string?> ChatSystems { get; } = [];
+
+    public List<string> PredictionPrompts { get; } = [];
+
     public IReadOnlyList<TokenCandidate> Tops { get; set; } = [];
 
     public string[] Reply { get; set; } = ["Hello", " there", "!"];
@@ -57,6 +61,8 @@ internal sealed class FakeInference : IInference
     public Task<IReadOnlyList<TokenCandidate>> TopTokensAsync(string prompt, int top, string model, CancellationToken cancellation)
     {
         Call("probs");
+        lock (Calls)
+            PredictionPrompts.Add(prompt);
         return Task.FromResult(Tops);
     }
 
@@ -70,6 +76,8 @@ internal sealed class FakeInference : IInference
         [EnumeratorCancellation] CancellationToken cancellation)
     {
         Call("chat");
+        lock (Calls)
+            ChatSystems.Add(system);
         foreach (var piece in Reply)
         {
             await Task.Yield();

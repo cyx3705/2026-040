@@ -51,6 +51,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("input bridge sources", Sync(TestInputSources)),
     ("aurora page contract", Sync(TestAuroraPage)),
     ("aurora board chat", TestBoardChatAsync),
+    ("aurora settings reach chat and prediction", TestBoardSettingsAsync),
     ("host loads the package", TestHostLoadsPackage),
 };
 
@@ -127,6 +128,80 @@ static void TestAuroraPage()
     True(text.Contains("\"view\":\"suggest\"", StringComparison.Ordinal), "发送栏声明候选取数视图");
     True(EchoBoard.LevelRows().Any(r => r["value"] == "雅思 6.5"), "难度候选含雅思");
     Equal("CET-4", EchoBoard.LevelLabel("cet:4"));
+    var saved = JsonNode.Parse(EchoPage.Describe("雅思 6.5", 15, 0, 4))!;
+    var widgets = saved["pages"]!.AsArray().SelectMany(p => FindWidgets(p!)).ToList();
+    Equal("雅思口语", widgets.Single(w => w["id"]?.GetValue<string>() == EchoPage.StandardBoxId)["value"]!.GetValue<string>());
+    Equal(EchoPage.StandardChannel, widgets.Single(w => w["id"]?.GetValue<string>() == EchoPage.StandardBoxId)["channel"]!.GetValue<string>());
+    Equal("{selection.echo.standard.value}", widgets.Single(w => w["id"]?.GetValue<string>() == EchoPage.LevelBoxId)["optionsSource"]!["args"]!["standard"]!.GetValue<string>());
+    Equal("故事", widgets.Single(w => w["id"]?.GetValue<string>() == EchoPage.LengthBoxId)["value"]!.GetValue<string>());
+
+    static IEnumerable<JsonObject> FindWidgets(JsonNode node)
+    {
+        if (node is JsonObject obj)
+        {
+            if (obj["kind"] is not null) yield return obj;
+            foreach (var child in obj.Select(kv => kv.Value).OfType<JsonNode>())
+                foreach (var widget in FindWidgets(child)) yield return widget;
+        }
+        else if (node is JsonArray array)
+            foreach (var child in array.OfType<JsonNode>())
+                foreach (var widget in FindWidgets(child)) yield return widget;
+    }
+}
+
+// MOD-004: check the actual inference boundary so a changing UI label cannot pass as a working setting.
+static async Task TestBoardSettingsAsync()
+{
+    using var ws = new Workspace();
+    var fake = new FakeInference { Reply = ["Hello!"], Tops = [new(" go", -0.1), new(" bank", -0.2), new(" apple", -0.3), new(" river", -0.4), new(" sweet", -0.5), new(" make", -0.6)] };
+    using var app = new EchoApp(ws.Paths, fake, _ => { });
+    var bus = new FakeBus(_ => CommandResult.Ok());
+    using var board = new EchoBoard(_ => Task.FromResult(app), bus, _ => { });
+    var token = CancellationToken.None;
+    Equal("5,10,15,20", string.Join(",", EchoBoard.CandidateCountRows().Select(r => r["value"])));
+    Equal(null, await board.SetCandidateCountAsync("12", token));
+    app.Store.SetSetting("suggest_candidates", "12");
+    Equal(5, await board.CandidateCountAsync(token));
+
+    foreach (var (standard, level) in new[] { ("国内考试", "cet:6"), ("雅思口语", "ielts:7.0"), ("欧洲语言框架", "cefr:A1") })
+    {
+        await board.SetStandardAsync(standard, token);
+        Equal(standard, Levels.StandardOf(await board.LevelAsync(token)));
+        True(EchoBoard.LevelRows(standard).All(r => Levels.StandardOf(Levels.Resolve(r["value"])) == standard), "等级只来自所选类型");
+        await board.SetLevelAsync(level, token);
+        await board.SetStandardAsync(standard, token);
+        Equal(level, await board.LevelAsync(token));
+        foreach (var length in Levels.Lengths.Select(l => l.Name))
+        {
+            await board.SetLengthAsync(length, token);
+            var expected = Levels.SystemPrompt(level, await board.LengthAsync(token));
+            // A named conversation prevents asynchronous title generation from obscuring the chat boundary.
+            var id = app.Store.Save(null, [new ChatTurn("user", "Earlier"), new ChatTurn("assistant", "Hello!")], level, title: "Settings test");
+            var start = fake.ChatSystems.Count;
+            await (await board.SendAsync(id, "Hi", token));
+            Equal(expected, fake.ChatSystems[start]!);
+            fake.Shared = true;
+            var prefixStart = fake.Prefixes.Count;
+            await (await board.SendAsync(id, "And then?", token));
+            True(fake.Prefixes.Skip(prefixStart).Any(p => p.Contains(expected, StringComparison.Ordinal)), "共享 KV 对话也必须携带有效设置");
+            fake.Shared = false;
+            await board.SuggestAsync(id, "I ", token);
+            True(fake.PredictionPrompts[^1].Contains(expected, StringComparison.Ordinal), "输入预测必须携带相同等级和长度");
+        }
+    }
+    foreach (var count in new[] { 5, 10, 15, 20 })
+    {
+        await board.SetCandidateCountAsync(count.ToString(), token);
+        var result = await board.SuggestAsync(await board.NewConversationAsync(token), "I ", token);
+        Equal(Math.Min(count, 6), result.Count);
+    }
+    await board.SyncSettingsAsync(token);
+    True(bus.Commands.Any(c => c.Contains("control=standard value=", StringComparison.Ordinal)), "设置回填类型");
+    using var reopened = new EchoBoard(_ => Task.FromResult(app), bus, _ => { });
+    Equal("欧洲语言框架", await reopened.StandardAsync(token));
+    Equal("cefr:A1", await reopened.LevelAsync(token));
+    Equal(4, await reopened.LengthAsync(token));
+    Equal(20, await reopened.CandidateCountAsync(token));
 }
 
 static async Task TestBoardChatAsync()
@@ -144,8 +219,8 @@ static async Task TestBoardChatAsync()
     Equal("cet:4", await board.LevelAsync(CancellationToken.None));
     Equal(null, await board.SetLevelAsync("不存在", CancellationToken.None));
     Equal(5, await board.CandidateCountAsync(CancellationToken.None));
-    Equal(12, await board.SetCandidateCountAsync("12", CancellationToken.None) ?? 0);
-    Equal(12, await board.CandidateCountAsync(CancellationToken.None));
+    Equal(10, await board.SetCandidateCountAsync("10", CancellationToken.None) ?? 0);
+    Equal(10, await board.CandidateCountAsync(CancellationToken.None));
     Equal(null, await board.SetCandidateCountAsync("21", CancellationToken.None));
 
     var id = await board.NewConversationAsync(CancellationToken.None);

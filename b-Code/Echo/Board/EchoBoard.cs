@@ -18,10 +18,9 @@ internal sealed class EchoBoard : IDisposable
 
     private const string LevelSetting = "aurora_level";
     private const string LengthSetting = "aurora_length";
-    private const string StandardSetting = "aurora_standard";
     private const string CandidateCountSetting = "suggest_candidates";
     private const int DefaultCandidateCount = 5;
-    private const int MaxCandidateCount = 20;
+    private static readonly int[] CandidateCounts = [5, 10, 15, 20];
 
     private readonly Func<CancellationToken, Task<EchoApp>> _app;
     private readonly ICommandBus _bus;
@@ -84,12 +83,12 @@ internal sealed class EchoBoard : IDisposable
     {
         var app = await _app(cancellation).ConfigureAwait(false);
         return int.TryParse(app.Store.Setting(CandidateCountSetting, DefaultCandidateCount.ToString(CultureInfo.InvariantCulture)), out var value)
-            && value is >= 1 and <= MaxCandidateCount ? value : DefaultCandidateCount;
+            && CandidateCounts.Contains(value) ? value : DefaultCandidateCount;
     }
 
     public async Task<int?> SetCandidateCountAsync(string value, CancellationToken cancellation)
     {
-        if (!int.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var count) || count is < 1 or > MaxCandidateCount)
+        if (!int.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var count) || !CandidateCounts.Contains(count))
             return null;
         var app = await _app(cancellation).ConfigureAwait(false);
         app.Store.SetSetting(CandidateCountSetting, count.ToString(CultureInfo.InvariantCulture));
@@ -110,12 +109,10 @@ internal sealed class EchoBoard : IDisposable
     }
 
     public static IReadOnlyList<IReadOnlyDictionary<string, string>> StandardRows()
-        => new[]
-        {
-            new Dictionary<string, string> { ["value"] = "欧洲语言框架" },
-            new Dictionary<string, string> { ["value"] = "国内考试" },
-            new Dictionary<string, string> { ["value"] = "雅思口语" },
-        };
+        => Levels.StandardChoices().Select(s => (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["value"] = s.Label }).ToList();
+
+    public async Task<string> StandardAsync(CancellationToken cancellation)
+        => Levels.StandardOf(await LevelAsync(cancellation).ConfigureAwait(false));
 
     public async Task<string?> SetStandardAsync(string value, CancellationToken cancellation)
     {
@@ -123,16 +120,30 @@ internal sealed class EchoBoard : IDisposable
         var hit = StandardRows().FirstOrDefault(x => x["value"].Equals(value, StringComparison.OrdinalIgnoreCase));
         if (hit is null)
             return null;
-        var app = await _app(cancellation).ConfigureAwait(false);
-        app.Store.SetSetting(StandardSetting, value);
+        var level = await LevelAsync(cancellation).ConfigureAwait(false);
+        if (Levels.StandardOf(level) != value)
+            await SetLevelAsync(Levels.Choices(value).First().Id, cancellation).ConfigureAwait(false);
         return value;
+    }
+
+    public async Task SyncSettingsAsync(CancellationToken cancellation)
+    {
+        var level = await LevelAsync(cancellation).ConfigureAwait(false);
+        foreach (var (control, value) in new[]
+        {
+            (EchoPage.StandardBoxId, Levels.StandardOf(level)),
+            (EchoPage.LevelBoxId, LevelLabel(level)),
+            (EchoPage.LengthBoxId, Levels.Lengths[await LengthAsync(cancellation).ConfigureAwait(false) - 1].Name),
+        })
+            _ = await _bus.InvokeAsync("aurora.ui.panelset panel=" + EchoPage.SendPanelId + " control=" + control
+                + " value=" + CommandParser.QuoteArg(value), "Echo", cancellation).ConfigureAwait(false);
     }
 
     public static IReadOnlyList<IReadOnlyDictionary<string, string>> LengthRows()
         => Levels.Lengths.Select(x => (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["value"] = x.Name }).ToList();
 
     public static IReadOnlyList<IReadOnlyDictionary<string, string>> CandidateCountRows()
-        => Enumerable.Range(1, MaxCandidateCount)
+        => CandidateCounts
             .Select(count => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>
             {
                 ["value"] = count.ToString(CultureInfo.InvariantCulture),
@@ -148,6 +159,9 @@ internal sealed class EchoBoard : IDisposable
             ["messages"] = new JsonArray(EchoApp.Turns(conv["messages"]).Select(m => (JsonNode)m.ToJson()).ToArray()),
             ["text"] = text,
             ["candidates"] = await CandidateCountAsync(cancellation).ConfigureAwait(false),
+            ["level"] = await LevelAsync(cancellation).ConfigureAwait(false),
+            ["length"] = await LengthAsync(cancellation).ConfigureAwait(false),
+            ["practice"] = conv["practice"]?.DeepClone(),
         };
         return await app.SuggestForAuroraAsync(body, cancellation).ConfigureAwait(false);
     }
@@ -204,8 +218,8 @@ internal sealed class EchoBoard : IDisposable
         return app.Dictionary.Learned().Count;
     }
 
-    public static IReadOnlyList<IReadOnlyDictionary<string, string>> LevelRows()
-        => Levels.Choices().Select(c => (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["value"] = c.Label }).ToList();
+    public static IReadOnlyList<IReadOnlyDictionary<string, string>> LevelRows(string? standard = null)
+        => Levels.Choices(standard).Select(c => (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["value"] = c.Label }).ToList();
 
     // ---- 行集 ----
 
