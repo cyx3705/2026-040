@@ -1,0 +1,109 @@
+<mxfile host="Electron">
+  <diagram name="第 1 页" id="WyF6OzDxLXC3al2PWLxx">
+    <mxGraphModel dx="1426" dy="840" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-5" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-18" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="历史上下文" vertex="1">
+          <mxGeometry height="60" width="120" x="20" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-6" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-19" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="历史上下文" vertex="1">
+          <mxGeometry height="60" width="120" x="180" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-7" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-20" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="历史上下文" vertex="1">
+          <mxGeometry height="60" width="120" x="340" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="历史上下文" vertex="1">
+          <mxGeometry height="60" width="120" x="510" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-21" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-8" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="功能调用" vertex="1">
+          <mxGeometry height="60" width="120" x="180" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-27" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-26">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="翻译分支" vertex="1">
+          <mxGeometry height="60" width="120" x="180" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-24" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="功能调用" vertex="1">
+          <mxGeometry height="60" width="120" x="340" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-25" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="功能调用" vertex="1">
+          <mxGeometry height="60" width="120" x="510" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-30" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-28">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="翻译分支" vertex="1">
+          <mxGeometry height="60" width="120" x="340" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-36" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-35">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="翻译分支" vertex="1">
+          <mxGeometry height="60" width="120" x="510" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-26" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="译文" vertex="1">
+          <mxGeometry height="60" width="120" x="180" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-28" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="译文" vertex="1">
+          <mxGeometry height="60" width="120" x="340" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-38" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-26">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-39" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-31" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="KV1" vertex="1">
+          <mxGeometry height="60" width="120" x="20" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-40" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-28">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-41" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-34">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-33" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="KV1+1" vertex="1">
+          <mxGeometry height="60" width="120" x="180" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-42" edge="1" parent="1" source="oHgo_DN_rQTMS_T1w-kv-34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;" target="oHgo_DN_rQTMS_T1w-kv-35">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-34" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="KV1+1+1" vertex="1">
+          <mxGeometry height="60" width="120" x="340" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="oHgo_DN_rQTMS_T1w-kv-35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="译文" vertex="1">
+          <mxGeometry height="60" width="120" x="510" y="250" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
